@@ -1,0 +1,47 @@
+@startuml
+skinparam maxMessageSize 150
+skinparam ParticipantBorderColor #4CAF50
+skinparam ActorBorderColor #4CAF50
+
+actor "Event Organizer" as Org
+participant "Web Browser\n(Client UI)" as Client
+participant "Django URLs/Router" as Router
+participant "Django View\n(EventManageView)" as View
+database "PostgreSQL DB\n(Events Table)" as DB
+
+Org -> Client: Click 'Edit' or 'Cancel' Event
+Client -> Router: POST /events/{event_id}/edit/ (or cancel)
+activate Router
+Router -> View: Route to view logic
+deactivate Router
+
+activate View
+View -> View: Validate Session / Auth Token
+
+alt User is Unauthenticated
+    View --> Client: 403 Forbidden / Redirect to Login
+else User is Authenticated
+    View -> DB: Query Event record by {event_id}
+    activate DB
+    DB --> View: Return Event (owner_id)
+    deactivate DB
+    
+    View -> View: Check if User.ID == Event.owner_id (or Admin)
+    
+    alt User is NOT Authorized
+        View --> Client: 403 Forbidden (Not the Owner)
+    else User is Authorized
+        View -> View: Validate new input (if Edit) or trigger soft-delete (if Cancel)
+        
+        View -> DB: UPDATE Event record (Apply changes / Status: Cancelled)
+        activate DB
+        DB --> View: Database Updated
+        deactivate DB
+        
+        View --> Client: 302 Redirect to updated Event Page
+    end
+end
+deactivate View
+
+Client --> Org: Display Success Message
+@enduml

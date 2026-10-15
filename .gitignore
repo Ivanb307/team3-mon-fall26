@@ -5,3 +5,8 @@ db.sqlite3
 staticfiles/
 .env
 .elasticbeanstalk/
+dist/
+media/
+.env.*
+!.env.example
+*.sqlite3-*

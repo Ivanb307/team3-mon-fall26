@@ -135,8 +135,9 @@ bundle, cache and team runtime prefixes; the role cannot deploy to the personal 
 It may read older team source bundles for rollback and clean generated deployment
 files only under this existing environment's `resources/environments/e-c27h4y6per/`
 prefix. It cannot delete original source bundles or another environment's files.
-It also reads only the existing team's CloudFormation stack metadata;
-there are no stack-creation or instance-start permissions.
+It reads the existing team's CloudFormation metadata and can update only that
+exact existing stack when Beanstalk changes deployment-command metadata.
+There are no stack-creation or instance-start permissions.
 
 The deploy job is serialized and an active release is never cancelled by a new
 push. An older queued commit skips deployment if develop has already advanced.

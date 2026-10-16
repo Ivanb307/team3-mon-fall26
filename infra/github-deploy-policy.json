@@ -76,6 +76,12 @@
       "Resource": "arn:aws:cloudformation:us-east-1:287872994760:stack/awseb-e-c27h4y6per-stack/af7f36f0-c843-11f1-b54e-0afff2b458ab"
     },
     {
+      "Sid": "UpdateOnlyTheExistingTeamStackForDeploymentMetadata",
+      "Effect": "Allow",
+      "Action": "cloudformation:UpdateStack",
+      "Resource": "arn:aws:cloudformation:us-east-1:287872994760:stack/awseb-e-c27h4y6per-stack/af7f36f0-c843-11f1-b54e-0afff2b458ab"
+    },
+    {
       "Sid": "ReadTeamBudget",
       "Effect": "Allow",
       "Action": "budgets:ViewBudget",

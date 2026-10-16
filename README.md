@@ -30,3 +30,9 @@ packaging, and the limitations of the temporary HTTP check.
 
 Deployment is manual. Pushing or merging GitHub branches does not update AWS.
 This project uses Django 5.2 LTS because Django 4.2 support ended in April 2026.
+
+The HTTPS deployment-check URL is https://dgaeptdmd25z5.cloudfront.net/.
+CloudFront supplies the browser-facing certificate and redirects HTTP to HTTPS.
+Its connection to the existing Beanstalk instance currently uses HTTP; the
+check still exposes no account routes. See the deployment guide before adding
+real user data or authentication.

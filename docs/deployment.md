@@ -62,3 +62,44 @@ permits internal Host headers only on `/health/`; other URLs keep host checks.
 No GitHub Actions or CodePipeline auto-deployment is configured. GitHub changes
 do not alter the running version until explicitly deployed. A release can later
 come from `develop` after review, using these same deployment settings.
+
+## HTTPS test entry point
+
+- URL: https://dgaeptdmd25z5.cloudfront.net/
+- CloudFront distribution: `E1YOQE0SL33H2U`
+- Origin: the same Beanstalk environment above; no additional EC2 or database
+- Configuration template: `infra/cloudfront.json` (excluded from the app ZIP)
+
+CloudFront uses its default trusted certificate for the assigned hostname and
+redirects browser HTTP requests to HTTPS. The original `elasticbeanstalk.com`
+hostname is still HTTP-only; adding `https://` to that hostname does not select
+the CloudFront distribution.
+
+The managed CachingDisabled policy prevents stale deployment pages and health
+checks. AllViewerExceptHostHeader forwards viewer query strings and cookies,
+while setting Host to the Beanstalk origin hostname so Django's explicit host
+allowlist remains valid. No WAF, access logs, Lambda@Edge, or paid subscription
+was added.
+
+This check encrypts **browser to CloudFront** traffic. **CloudFront to Beanstalk
+still uses HTTP**, so this is not end-to-end TLS. Keep deployment-check mode
+enabled and do not expose account routes or real user data until origin HTTPS
+and trusted proxy forwarding are configured. Do not just set DJANGO_HTTPS=True
+behind the current HTTP origin; that can cause redirect loops. The future
+application's CSRF trusted origins must include its chosen HTTPS frontend URL.
+
+The distribution uses pay-as-you-go pricing with CloudFront's applicable free
+usage allowance; it is not subscribed to a flat-rate plan. AWS Free Tier accounts
+are not eligible for CloudFront flat-rate plans. Existing EC2, disk and IPv4
+charges continue. Relevant official documentation:
+
+- https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-https-viewers-to-cloudfront.html
+- https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/
+- https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/flat-rate-pricing-plan.html
+
+For recreation, copy the JSON template outside the source tree, replace the
+origin placeholder with the existing environment hostname, and choose a unique
+CallerReference. Review the account and existing distributions before calling
+`aws cloudfront create-distribution --distribution-config file://<file>`.
+Updating the existing distribution uses its current ETag and
+`aws cloudfront update-distribution`, not a second distribution.

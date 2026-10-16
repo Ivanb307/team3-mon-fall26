@@ -11,4 +11,5 @@ staticfiles/
 media/
 dist/
 docs/
+infra/
 .elasticbeanstalk/

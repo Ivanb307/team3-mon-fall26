@@ -7,3 +7,4 @@ Procfile text eol=lf
 .gitignore export-ignore
 .gitattributes export-ignore
 docs/ export-ignore
+infra/ export-ignore

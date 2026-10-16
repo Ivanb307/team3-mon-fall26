@@ -208,6 +208,10 @@ def migrate():
     child_env = {**os.environ, "HOME": "/var/app", "USER": "webapp", "LOGNAME": "webapp"}
     run(["runuser", "-u", "webapp", "--preserve-environment", "--",
          str(executable), "manage.py", "migrate", "--noinput"], env=child_env)
+    # Configuration deployments rebuild staging but skip container_commands.
+    # Like the existing app-deployment collectstatic command, run as root so
+    # previously collected root-owned files can be replaced safely.
+    run([str(executable), "manage.py", "collectstatic", "--noinput"], env=child_env)
     if local:
         backup()
 

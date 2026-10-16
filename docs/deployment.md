@@ -208,6 +208,8 @@ systemd timer that checks renewal twice daily and reloads Nginx after renewal.
 Configuration-deployment hooks also regenerate the Nginx HTTPS listener and
 maintain the renewal timer, so changing database/environment properties keeps
 port 443 enabled when Beanstalk rebuilds its proxy configuration.
+The migration hook also collects static files, since configuration deployments
+rebuild the staging directory without running application container commands.
 If no TLS domain is configured, these hooks do nothing. Instance replacement
 will need fresh certificate issuance, subject to the certificate authority's
 availability and limits. Maintain the same hostname and public DNS routing.

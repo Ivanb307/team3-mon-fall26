@@ -58,6 +58,7 @@
 
   <div class="lp-ticker" aria-label="Sports on NYC Active">
     <div class="lp-ticker-track">
+      {# Rendered twice so the strip can scroll in a seamless loop; the copy is hidden from screen readers. #}
       {% for _ in "ab" %}
         <ul {% if forloop.last %}aria-hidden="true"{% endif %}>
           <li>Soccer</li><li>Basketball</li><li>Running</li><li>Tennis</li><li>Volleyball</li><li>Ultimate</li><li>Pickleball</li><li>Handball</li><li>Softball</li><li>Cricket</li>
@@ -148,6 +149,7 @@
     </div>
     <div class="lp-tm-viewport">
       <div class="lp-tm-track">
+        {# Rendered twice so the cards can scroll in a seamless loop; the copy is hidden from screen readers. #}
         {% for _ in "ab" %}
         <ul class="lp-tm-group" {% if forloop.last %}aria-hidden="true"{% endif %}>
           <li class="lp-tm-card">

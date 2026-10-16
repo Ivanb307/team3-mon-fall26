@@ -4,7 +4,7 @@ const updateNav = () => nav.classList.toggle('is-scrolled', window.scrollY > 8);
 updateNav();
 window.addEventListener('scroll', updateNav, { passive: true });
 
-const targets = document.querySelectorAll('.reveal, [data-inview]');
+const targets = document.querySelectorAll('.reveal');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 if (reduceMotion || !('IntersectionObserver' in window)) {

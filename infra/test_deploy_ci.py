@@ -86,6 +86,18 @@ class AutomaticDeploymentTests(unittest.TestCase):
 
     @patch("deploy_ci.verify_https", side_effect=OSError("unavailable"))
     @patch("deploy_ci.wait_for_version")
+    def test_failed_release_restores_unhealthy_environment_even_if_label_did_not_change(self, wait, verify):
+        unhealthy = {**self.environment, "Health": "Red"}
+        self.clients["elasticbeanstalk"].describe_environments.side_effect = [
+            {"Environments": [self.environment]}, {"Environments": [unhealthy]}]
+        with self.assertRaisesRegex(OSError, "unavailable"):
+            deploy.deploy_version(self.clients, "new", "previous")
+        self.assertEqual(self.clients["elasticbeanstalk"].update_environment.call_args_list, [
+            call(EnvironmentName=deploy.ENVIRONMENT, VersionLabel="new"),
+            call(EnvironmentName=deploy.ENVIRONMENT, VersionLabel="previous")])
+
+    @patch("deploy_ci.verify_https", side_effect=OSError("unavailable"))
+    @patch("deploy_ci.wait_for_version")
     def test_failed_release_does_not_bypass_new_budget_stop(self, wait, verify):
         exhausted = copy.deepcopy(self.budget)
         exhausted["CalculatedSpend"]["ActualSpend"]["Amount"] = "15"

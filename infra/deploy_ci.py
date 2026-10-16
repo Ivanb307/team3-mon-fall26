@@ -97,7 +97,7 @@ def deploy_version(clients, version, previous):
     except Exception:
         # Never restart a stopped/paused environment or bypass the budget to roll back.
         environment = preflight(clients)
-        if previous and environment.get("VersionLabel") != previous:
+        if previous and (environment.get("VersionLabel") != previous or environment.get("Health") != "Green"):
             print("Release verification failed; restoring the previous application version", flush=True)
             clients["elasticbeanstalk"].update_environment(EnvironmentName=ENVIRONMENT, VersionLabel=previous)
             wait_for_version(clients, previous)

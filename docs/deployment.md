@@ -82,9 +82,16 @@ organization/repository IDs reported by this repository's OIDC settings, plus
 the exact `refs/heads/develop` subject and `sts.amazonaws.com` audience.
 The policy/trust documents are in `infra/github-deploy-*.json`. Only the existing
 team environment, its application versions, dedicated source-bundle and
-Beanstalk extension-cache prefixes for this application in the existing bucket,
+Beanstalk extension-cache and existing team-environment runtime prefixes in the existing bucket,
 and read-only cost/pause checks are permitted. The separate
 personal assignment is excluded. No account/admin credentials are passed to CI.
+Beanstalk source validation also needs bucket location, ACL and key-listing
+reads. Object-content reads and writes remain scoped to this application's
+bundle, cache and team runtime prefixes; the role cannot deploy to the personal environment.
+It may read older team source bundles for rollback and remove generated runtime
+version copies only under this environment's `_runtime/_versions/nyc-active/`
+prefix. It also reads only the existing team's CloudFormation stack metadata;
+there are no stack-creation or instance-start permissions.
 
 The deploy job is serialized and an active release is never cancelled by a new
 push. An older queued commit skips deployment if develop has already advanced.
@@ -97,14 +104,16 @@ Before publishing and throughout the deployment wait, the script checks the
 project's $15 pre-credit budget, the distribution's enabled state, the expected
 environment identity and its unpaused single-instance Auto Scaling group.
 Missing cost data, a reached threshold, a disabled distribution or suspended
-scaling stops publication. The workflow cannot intentionally resume the budget
-guard's paused group or re-enable CloudFront. Billing remains delayed; these
+scaling stops publication. The script never resumes the budget
+guard's paused group or re-enables CloudFront. Billing remains delayed; these
 checks do not turn the budget into an exact cap.
 
 A successful run waits for Ready/Green, then checks the HTTPS homepage, its
 referenced local static assets, `/health/` and `/ready/`. If release verification
 fails and the environment is Ready and still passes the budget/pause checks,
-the script attempts to restore the preceding application version. Database
+the script attempts to restore the preceding application version.
+An unhealthy environment is restored even if AWS still reports the old version
+label after a failed update. Database
 migrations are not reversed by this operation; review backwards compatibility
 when introducing schema changes. If the environment is busy or budget-stopped,
 the workflow fails without forcing recovery.

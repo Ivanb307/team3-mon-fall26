@@ -35,20 +35,45 @@
     {
       "Sid": "StoreOnlyTeamWorkflowBundles",
       "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion"],
       "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/nyc-active/gha/*"
     },
     {
-      "Sid": "CacheOnlyTeamBeanstalkExtensions",
+      "Sid": "ReadPreviousTeamBundlesForRollback",
       "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject"],
-      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/resources/_runtime/_embedded_extensions/nyc-active/*"
+      "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectAcl"],
+      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/nyc-active/*"
+    },
+    {
+      "Sid": "ManageOnlyTeamBeanstalkRuntimeFiles",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectAcl", "s3:PutObjectAcl"],
+      "Resource": [
+        "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/resources/_runtime/_embedded_extensions/nyc-active/*",
+        "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/resources/environments/e-c27h4y6per/*"
+      ]
+    },
+    {
+      "Sid": "CleanOnlyTeamRuntimeVersionCopies",
+      "Effect": "Allow",
+      "Action": "s3:DeleteObject",
+      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/resources/environments/e-c27h4y6per/_runtime/_versions/nyc-active/*"
     },
     {
       "Sid": "LocateExistingBundleBucket",
       "Effect": "Allow",
-      "Action": "s3:GetBucketLocation",
+      "Action": ["s3:GetBucketLocation", "s3:GetBucketAcl", "s3:ListBucket"],
       "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760"
+    },
+    {
+      "Sid": "ReadOnlyTheExistingTeamStack",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:GetTemplate", "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackResources", "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStackEvents"
+      ],
+      "Resource": "arn:aws:cloudformation:us-east-1:287872994760:stack/awseb-e-c27h4y6per-stack/af7f36f0-c843-11f1-b54e-0afff2b458ab"
     },
     {
       "Sid": "ReadTeamBudget",

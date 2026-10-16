@@ -1,6 +1,7 @@
 """Guard against accidental data replacement or broader database exposure."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -24,6 +25,18 @@ class LocalDatabaseTests(unittest.TestCase):
         with patch.object(database, "environment", return_value={}), patch.object(database, "run") as run:
             database.setup()
         run.assert_not_called()
+
+    def test_migrations_keep_database_configuration_without_inheriting_roots_home(self):
+        environment = self.valid_environment()
+        with patch.object(database, "environment", return_value=environment), \
+                patch.object(database, "backup"), patch.object(database, "run") as run, \
+                patch.object(database.Path, "glob", return_value=iter([Path("/venv/bin/python")])), \
+                patch.dict(os.environ, {"HOME": "/root"}):
+            database.migrate()
+        child = run.call_args.kwargs["env"]
+        self.assertEqual(child["HOME"], "/var/app")
+        self.assertEqual(child["USER"], "webapp")
+        self.assertEqual(child["DB_PASSWORD"], environment["DB_PASSWORD"])
 
     def test_local_mode_refuses_network_hosts_or_another_projects_backup_bucket(self):
         for key, value in [("DB_HOST", "0.0.0.0"), ("DB_NAME", "other_project"),

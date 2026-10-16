@@ -205,8 +205,9 @@ def migrate():
     # Both app and configuration deployments run this hook. Run Django with
     # the same unprivileged OS account and environment as the web process.
     executable = next(Path("/var/app/venv").glob("*/bin/python"))
+    child_env = {**os.environ, "HOME": "/var/app", "USER": "webapp", "LOGNAME": "webapp"}
     run(["runuser", "-u", "webapp", "--preserve-environment", "--",
-         str(executable), "manage.py", "migrate", "--noinput"])
+         str(executable), "manage.py", "migrate", "--noinput"], env=child_env)
     if local:
         backup()
 

@@ -111,7 +111,8 @@ def main():
         raise RuntimeError("Only pushes to the central develop branch can deploy")
     sha = os.environ["GITHUB_SHA"]
     run_id = os.environ["GITHUB_RUN_ID"]
-    if not re.fullmatch(r"[0-9a-f]{40}", sha) or not run_id.isdigit():
+    attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+    if not re.fullmatch(r"[0-9a-f]{40}", sha) or not run_id.isdigit() or not attempt.isdigit():
         raise RuntimeError("Invalid workflow release identity")
     if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != sha:
         raise RuntimeError("Checkout does not match the tested commit")
@@ -125,7 +126,7 @@ def main():
         raise RuntimeError("Unexpected AWS account")
     clients = {name: session.client(name) for name in ["budgets", "cloudfront", "elasticbeanstalk", "autoscaling"]}
     previous = preflight(clients).get("VersionLabel")
-    version = "gha-" + run_id + "-" + sha[:12]
+    version = "gha-" + run_id + "-" + attempt + "-" + sha[:12]
     archive = Path("dist/nyc-active-ci.zip")
     archive.parent.mkdir(exist_ok=True)
     subprocess.run(["git", "archive", "--format=zip", "--output=" + str(archive), sha], check=True)

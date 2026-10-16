@@ -17,9 +17,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from . import views
+from django.views.generic import TemplateView
 
 urlpatterns = [
-    path('', views.home, name='home'),
+    path('', TemplateView.as_view(template_name='landing.html'), name='home'),
     path('health/', views.health, name='health'),
     path('ready/', views.ready, name='ready'),
     path('admin/', admin.site.urls),

@@ -44,6 +44,16 @@ class DatabaseProbeTests(TestCase):
         self.assertEqual(response.json(), {"status": "ok"})
 
 
+class LandingPageTests(SimpleTestCase):
+    def test_frontend_landing_page_renders_without_database_access(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "landing.html")
+        self.assertContains(response, "Find your")
+        self.assertContains(response, "next game.")
+        self.assertNotContains(response, "This temporary page will be replaced")
+
+
 class ProductionSettingsTests(SimpleTestCase):
     def production_environment(self):
         return {
@@ -128,14 +138,30 @@ class ProductionSettingsTests(SimpleTestCase):
         )
         for name in ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"):
             environment.pop(name)
+        collected = subprocess.run(
+            [sys.executable, "manage.py", "collectstatic", "--noinput", "--verbosity", "0"],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(collected.returncode, 0, collected.stderr)
         code = (
+            "import re; "
             "from config.wsgi import application; "
             "from django.test import Client; "
             "client=Client(HTTP_HOST='nyc-active.example'); "
-            "assert client.get('/').status_code == 200; "
+            "page=client.get('/'); "
+            "assert page.status_code == 200; "
+            "assert b'Find your' in page.content; "
+            "assets=set(re.findall(r'(?:src|href)=\"(/static/[^\"]+)\"', page.content.decode())); "
+            "assert len(assets) >= 8, assets; "
+            "assert all(client.get(asset).status_code == 200 for asset in assets), assets; "
             "assert client.get('/health/').status_code == 200; "
             "assert client.get('/admin/').status_code == 404; "
             "assert client.get('/admin/login/').status_code == 404; "
+            "assert client.get('/login/').status_code == 404; "
+            "assert client.get('/register/').status_code == 404; "
             "assert client.get('/accounts/login/').status_code == 404"
         )
         result = subprocess.run(

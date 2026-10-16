@@ -1,0 +1,472 @@
+:root {
+  /* From the logo: dark green #053d27, lime #7fc316 */
+  --green-950: #032517;
+  --green-900: #053d27;
+  --green-700: #146c43;
+  --green-600: #1a8754;
+  --green-50: #ecf6f0;
+  --lime-500: #7fc316;
+  --ink: #101828;
+  --ink-2: #344054;
+  --muted: #667085;
+  --placeholder: #98a2b3;
+  --border: #d0d5dd;
+  --surface: #ffffff;
+  --bg: #f6f8f7;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+  --danger-border: #fecdca;
+  --success: #067647;
+  --success-bg: #ecfdf3;
+  --success-border: #abefc6;
+  --radius: 8px;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --icon-user: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21a8 8 0 0 1 16 0'/%3E%3C/svg%3E");
+  --icon-mail: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3Cpath d='m3 7 9 6 9-6'/%3E%3C/svg%3E");
+  --icon-lock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E");
+  --icon-eye: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+  --icon-eye-off: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3l18 18'/%3E%3Cpath d='M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6A17.4 17.4 0 0 0 2 12s3.5 7 10 7a10.6 10.6 0 0 0 5.4-1.6'/%3E%3Cpath d='M9.9 9.9a3 3 0 0 0 4.2 4.2'/%3E%3C/svg%3E");
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--green-700);
+}
+
+/* Brand */
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-logo {
+  display: block;
+  width: auto;
+  height: 40px;
+}
+
+/* Header (non-auth pages) */
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-nav form {
+  margin: 0;
+}
+
+.site-nav-user {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.site-main {
+  max-width: 960px;
+  padding: 32px 16px;
+  margin: 0 auto;
+}
+
+/* Buttons */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn--primary {
+  color: #fff;
+  background: var(--green-900);
+}
+
+.btn--primary:hover {
+  background: var(--green-700);
+}
+
+.btn--ghost {
+  color: var(--ink-2);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.btn--ghost:hover {
+  background: var(--green-50);
+}
+
+.btn--block {
+  width: 100%;
+  min-height: 48px;
+}
+
+.btn:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(26, 135, 84, 0.4);
+  outline-offset: 2px;
+}
+
+/* Alerts */
+
+.alert {
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.alert p {
+  margin: 0;
+}
+
+.alert--error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+
+.alert--success {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+
+/* Auth pages: image panel + form panel */
+
+.auth-page {
+  display: grid;
+  min-height: 100vh;
+  background: var(--surface);
+}
+
+.auth-visual {
+  display: none;
+  position: relative;
+  overflow: hidden;
+  /* Photo: RDNE Stock project on Pexels (pexels.com/photo/7551734) */
+  background: var(--green-900) url("../img/auth-hero.jpg") 62% center / cover no-repeat;
+}
+
+.auth-visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(3, 37, 23, 0.55) 0%, rgba(3, 37, 23, 0) 22%),
+    linear-gradient(to top, rgba(3, 37, 23, 0.9) 0%, rgba(3, 37, 23, 0.6) 28%, rgba(3, 37, 23, 0) 52%);
+  pointer-events: none;
+}
+
+.auth-visual .brand {
+  position: absolute;
+  z-index: 1;
+  top: clamp(32px, 4vw, 48px);
+  left: clamp(32px, 4vw, 56px);
+}
+
+.auth-visual-caption {
+  position: absolute;
+  z-index: 1;
+  right: clamp(32px, 4vw, 56px);
+  bottom: clamp(40px, 5vw, 64px);
+  left: clamp(32px, 4vw, 56px);
+  margin: 0;
+  color: #fff;
+}
+
+.auth-visual-quote {
+  margin: 0;
+}
+
+.auth-visual-quote p {
+  margin: 0 0 12px;
+  font-size: clamp(1.125rem, 0.7rem + 0.7vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.auth-visual-credit {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.88;
+}
+
+.auth-visual-credit::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  background: var(--lime-500);
+}
+
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+.auth-form-wrap {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-mobile-brand {
+  display: flex;
+  width: fit-content;
+  margin: 0 auto 40px;
+}
+
+.auth-header {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.auth-title {
+  margin: 0 0 8px;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.auth-subtitle {
+  margin: 0;
+  color: var(--muted);
+}
+
+.auth-form {
+  display: grid;
+  gap: 20px;
+}
+
+.auth-form .btn {
+  margin-top: 8px;
+}
+
+.auth-switch {
+  margin: 28px 0 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+.auth-switch a {
+  margin-left: 4px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-switch a:hover {
+  text-decoration: underline;
+}
+
+@media (min-width: 960px) {
+  .auth-page {
+    grid-template-columns: 45fr 55fr;
+  }
+
+  .auth-visual {
+    display: block;
+  }
+
+  .auth-mobile-brand {
+    display: none;
+  }
+
+  .auth-panel {
+    padding: 48px;
+  }
+}
+
+/* Form fields */
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.input-wrap {
+  position: relative;
+}
+
+.input-wrap input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-wrap input::placeholder {
+  color: var(--placeholder);
+}
+
+.input-wrap input:focus {
+  outline: none;
+  border-color: var(--green-600);
+  box-shadow: 0 0 0 4px rgba(26, 135, 84, 0.15);
+}
+
+/* Leading icon, chosen by input type */
+.input-wrap--text,
+.input-wrap--email,
+.input-wrap--password {
+  --icon: var(--icon-user);
+}
+
+.input-wrap--email {
+  --icon: var(--icon-mail);
+}
+
+.input-wrap--password {
+  --icon: var(--icon-lock);
+}
+
+.input-wrap--text input,
+.input-wrap--email input,
+.input-wrap--password input {
+  padding-left: 46px;
+}
+
+.input-wrap--password input {
+  padding-right: 52px;
+}
+
+.input-wrap--text::before,
+.input-wrap--email::before,
+.input-wrap--password::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 15px;
+  width: 19px;
+  height: 19px;
+  background: var(--placeholder);
+  transform: translateY(-50%);
+  pointer-events: none;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+.input-wrap:focus-within::before {
+  background: var(--green-700);
+}
+
+/* Show/hide password button (added by password-toggle.js) */
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.password-toggle::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: var(--ink-2);
+  -webkit-mask: var(--icon-eye) center / contain no-repeat;
+  mask: var(--icon-eye) center / contain no-repeat;
+}
+
+.password-toggle[aria-pressed="true"]::before {
+  -webkit-mask-image: var(--icon-eye-off);
+  mask-image: var(--icon-eye-off);
+}
+
+.password-toggle:hover {
+  background: var(--green-50);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--green-600);
+}
+
+.field--error input {
+  border-color: var(--danger);
+}
+
+.field--error input:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px rgba(180, 35, 24, 0.12);
+}
+
+.field-error {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--danger);
+}
+
+.field-help {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.field-help ul {
+  padding-left: 18px;
+  margin: 0;
+}

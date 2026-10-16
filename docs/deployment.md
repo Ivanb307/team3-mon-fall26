@@ -30,8 +30,12 @@ Configure these through AWS environment properties, never committed files:
 | `DJANGO_HTTPS` | `True` |
 | `DJANGO_TLS_DOMAIN` | Exact existing Beanstalk hostname |
 
-This mode exposes only `/`, `/health/`, and `/ready/`. It deliberately excludes
-admin and account routes for this infrastructure check. SQLite is only
+This mode exposes Derah's landing page at `/`, plus `/health/` and `/ready/`.
+It deliberately excludes admin and account routes while the authentication
+backend is being integrated. The login/sign-up templates are present, but their
+views are not implemented yet; `/login/` and `/register/` return 404 for now.
+The landing page's event board and testimonials are frontend sample content,
+not live events or verified user reviews. SQLite is only
 for infrastructure verification, not real user data; instance replacement can
 lose this data. `/ready/` validates SQLite, not PostgreSQL or RDS.
 
@@ -54,7 +58,8 @@ startup rather than silently using SQLite.
    the old skeleton, update `DJANGO_SETTINGS_MODULE` from
    `config.settings.production` to `config.production` in the same update.
 5. Wait for Ready/Green and confirm `/`, `/health/`, `/ready/` return 200 over HTTPS.
-   Confirm `/admin/` and `/accounts/login/` return 404 in check mode.
+   Confirm the landing page and its hashed CSS, JS and images load. Confirm
+   `/admin/`, `/login/`, `/register/` and `/accounts/login/` return 404 in check mode.
 
 `Procfile` starts Gunicorn on port 8000. `.ebextensions/django.config` runs
 migrations and collects static files, served by WhiteNoise. Health middleware
@@ -97,8 +102,9 @@ If no TLS domain is configured, these hooks do nothing. Instance replacement
 will need fresh certificate issuance, subject to the certificate authority's
 availability and limits. Maintain the same hostname and public DNS routing.
 
-Keep deployment-check mode enabled until the team's actual features and
-PostgreSQL database are ready. The application's CSRF trusted origins must
+Keep the restricted deployment-check mode enabled while publishing the landing
+page, until the team's authentication features and PostgreSQL database are ready.
+The application's CSRF trusted origins must
 include its chosen HTTPS frontend URL. HTTPS does not make the temporary SQLite
 database suitable for real user data.
 

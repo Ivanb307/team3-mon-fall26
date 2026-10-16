@@ -29,7 +29,8 @@ STORAGES = {
 }
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
 
-# Temporary low-cost HTTP verification exposes no account or admin routes.
+# The public landing page can run before the account backend and database are ready.
+# Restricted mode still excludes account and admin routes.
 DEPLOYMENT_CHECK_ONLY = os.environ.get("DJANGO_DEPLOYMENT_CHECK_ONLY", "False").lower() in {"true", "1"}
 if DEPLOYMENT_CHECK_ONLY:
     ROOT_URLCONF = "config.deployment_urls"

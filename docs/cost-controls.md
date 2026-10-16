@@ -22,6 +22,14 @@ and EventBridge; it does not run chargeable Cost Explorer usage queries.
 Certificate issuance/renewal uses the existing instance with no new EC2 or ALB.
 The separate individual assignment consumes the same account credit balance.
 
+Online account testing runs PostgreSQL on this same instance and existing disk;
+there is no separate RDS, EC2 or load-balancer hourly fee. Hourly compressed
+backups add small S3 storage/request usage in the project-tagged
+`nyc-active-db-backups-287872994760-us-east-1` bucket. Timestamped backups expire
+after seven days; one latest dump remains. Size and request charges grow with
+data/traffic, so this is not an unlimited free database. Review disk space and
+backup timestamps as the team adds data.
+
 Automatic develop deployment uses standard GitHub-hosted Linux runners for this
 public repository. It adds no AWS build service or server. Source bundles use a
 dedicated prefix in the existing S3 bucket; storage/request usage can still accrue.
@@ -77,7 +85,10 @@ was initialized and the project cost tag activated during setup; initial data
 and historical tag backfill can take time. A zero or missing calculated spend
 while data is preparing does not mean the environment used no resources.
 
-Stopping compute does not remove the EBS disk or Elastic IP; these can continue
+Stopping compute also stops the colocated PostgreSQL and its backup timer.
+Existing encrypted S3 backups remain available and their storage can still accrue
+charges. The guard does not delete data or backups. Stopping compute does not
+remove the EBS disk or Elastic IP; these can continue
 to consume roughly $4.29/month at the above baseline. Shared S3 source storage
 is not included in the project-tag budget because its bucket also serves the
 personal assignment. Future untagged resources, new services or database

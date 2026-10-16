@@ -10,7 +10,9 @@ It does not introduce a second Django project or a separate core app.
 - Environment: `nyc-active-demo-287872994760`
 - Platform: Amazon Linux 2023, Python 3.12
 - One `t3.micro` instance, 8 GiB gp3 root disk
-- No load balancer, RDS instance, or NAT gateway for this check
+- PostgreSQL 16 on the same instance, accessible only through loopback with TLS
+- Private encrypted S3 database backups, hourly with seven-day archive retention
+- No load balancer, RDS instance, or NAT gateway
 
 The running instance uses standard CPU credits to avoid surplus CPU charges.
 Recheck that setting if Elastic Beanstalk replaces the instance. Compute,
@@ -20,31 +22,72 @@ storage, and public IPv4 still consume AWS credits while running.
 
 Configure these through AWS environment properties, never committed files:
 
-| Variable | Temporary deployment check |
+| Variable | Online account testing |
 | --- | --- |
 | `DJANGO_SETTINGS_MODULE` | `config.production` |
 | `DJANGO_SECRET_KEY` | Random private value stored in AWS |
 | `DJANGO_ALLOWED_HOSTS` | Exact environment hostname, optionally localhost |
-| `DJANGO_DEPLOYMENT_CHECK_ONLY` | `True` |
-| `DJANGO_DATABASE_PATH` | `/var/app/data/db.sqlite3` |
+| `DJANGO_DEPLOYMENT_CHECK_ONLY` | `False` |
+| `DJANGO_LOCAL_POSTGRES` | `True` |
+| `DB_HOST` | `127.0.0.1` |
+| `DB_PORT` | `5432` |
+| `DB_NAME` / `DB_USER` | `nyc_active` |
+| `DB_PASSWORD` | Private random URL-safe value, at least 40 characters |
+| `DJANGO_DB_BACKUP_BUCKET` | `nyc-active-db-backups-287872994760-us-east-1` |
 | `DJANGO_HTTPS` | `True` |
 | `DJANGO_TLS_DOMAIN` | Exact existing Beanstalk hostname |
 
-This mode exposes Derah's landing page at `/`, plus `/health/` and `/ready/`.
-It deliberately excludes admin and account routes while the authentication
-backend is being integrated. The login/sign-up templates are present, but their
-views are not implemented yet; `/login/` and `/register/` return 404 for now.
+This mode exposes Derah's landing page, `/register/`, `/login/`, and POST-only
+`/logout/`, backed by Django authentication and PostgreSQL. Set
+`DJANGO_CSRF_TRUSTED_ORIGINS` to both the HTTPS CloudFront and origin URLs.
+`/ready/` checks the actual PostgreSQL connection.
 The landing page's event board and testimonials are frontend sample content,
-not live events or verified user reviews. SQLite is only
-for infrastructure verification, not real user data; instance replacement can
-lose this data. `/ready/` validates SQLite, not PostgreSQL or RDS.
+not live events or verified user reviews.
 
-For real application testing, keep `DJANGO_HTTPS=True`, set
-`DJANGO_DEPLOYMENT_CHECK_ONLY=False`, and provide `DB_HOST`, `DB_NAME`,
-`DB_USER`, `DB_PASSWORD`, optionally `DB_PORT` (default 5432).
-PostgreSQL connections require TLS. Set `DJANGO_CSRF_TRUSTED_ORIGINS` to any
-needed HTTPS origins, comma separated. Missing database configuration fails
-startup rather than silently using SQLite.
+The optional restricted infrastructure mode remains available by setting
+`DJANGO_DEPLOYMENT_CHECK_ONLY=True` and an explicit `DJANGO_DATABASE_PATH` for
+temporary SQLite probes. It hides account/admin routes. PostgreSQL is required
+when check mode is off, and HTTPS must stay enabled. Missing configuration fails
+startup rather than silently falling back to SQLite.
+
+## Low-cost PostgreSQL and recovery
+
+`.platform/scripts/local_database.py` provisions the AWS-provided PostgreSQL 16
+packages only when `DJANGO_LOCAL_POSTGRES=True`. The service listens on
+`127.0.0.1` only, requires TLS and SCRAM password authentication for the
+non-superuser application role, and uses conservative memory/connection limits.
+Port 5432 is not opened in the security group. Passwords are read from AWS
+environment properties and passed to SQL over stdin, never committed or logged.
+
+Data lives in `/var/lib/pgsql/data`, outside application releases. Normal code
+deployments and instance restarts preserve it. Migration hooks run for both app
+and configuration deployments, taking a backup before and after migrations.
+Schema changes still require backwards-compatible migrations; reverting code
+does not reverse migrations.
+
+The systemd `nyc-active-db-backup.timer` dumps PostgreSQL hourly to the private
+bucket above. S3 blocks public access, requires HTTPS and uses AES256 server-side
+encryption. Timestamped `postgres/hourly/` dumps expire after seven days;
+`postgres/latest.dump` remains as the latest recovery point. The instance role
+can list/read/write only this backup prefix, with no backup-deletion permission.
+The bucket has `Project=NYCActive` for the existing budget's cost scope.
+
+On a newly initialized instance, setup restores `postgres/latest.dump` before
+migrations if it exists. An inaccessible backup fails setup rather than starting
+with a blank database. An initialized database is never automatically overwritten.
+If unmarked data already contains tables, setup also stops for manual inspection.
+An owner can restore a selected timestamped dump to a separate empty PostgreSQL
+database with `pg_restore --single-transaction --no-owner --no-acl`, verify it,
+then schedule an application cutover. Do not restore over a live populated DB.
+
+This is a single-instance **team test** database, without high availability or
+point-in-time recovery. Instance/disk loss can lose changes since the last
+successful backup (normally up to about one hour; longer if backups fail).
+The latest backup is retained while a budget-stopped instance remains offline.
+For wider public use, review managed PostgreSQL, monitoring and access controls.
+Systems Manager access on the existing instance role enables maintenance without
+opening SSH. Check backup service failures with
+`journalctl -u nyc-active-db-backup.service`, and confirm the latest S3 timestamp.
 
 ## Manual release
 
@@ -59,10 +102,11 @@ startup rather than silently using SQLite.
    `config.settings.production` to `config.production` in the same update.
 5. Wait for Ready/Green and confirm `/`, `/health/`, `/ready/` return 200 over HTTPS.
    Confirm the landing page and its hashed CSS, JS and images load. Confirm
-   `/admin/`, `/login/`, `/register/` and `/accounts/login/` return 404 in check mode.
+   `/login/` and `/register/` render and test sign-up/login/logout with a disposable
+   account. In optional check mode, confirm account/admin routes return 404.
 
-`Procfile` starts Gunicorn on port 8000. `.ebextensions/django.config` runs
-migrations and collects static files, served by WhiteNoise. Health middleware
+`Procfile` starts Gunicorn on port 8000. Platform predeploy hooks run migrations;
+`.ebextensions/django.config` collects static files, served by WhiteNoise. Health middleware
 permits internal Host headers only on `/health/`; other URLs keep host checks.
 
 The manual procedure remains available for recovery. Normal updates to the
@@ -128,7 +172,8 @@ After fixing a transient problem, use **Re-run jobs** on the existing run;
 outdated commits are skipped. Fix failed tests through a new PR. If publication
 must be suspended, disable this workflow in GitHub Actions; this does not stop
 the currently running site or its usage charges. Automatic deployment does not
-enable the still-unimplemented login/registration backend or provision a database.
+change the environment's database credentials or check-mode flag. Account
+activation requires the explicit environment configuration described above.
 
 ## HTTPS test entry point
 
@@ -163,8 +208,6 @@ If no TLS domain is configured, these hooks do nothing. Instance replacement
 will need fresh certificate issuance, subject to the certificate authority's
 availability and limits. Maintain the same hostname and public DNS routing.
 
-Keep the restricted deployment-check mode enabled while publishing the landing
-page, until the team's authentication features and PostgreSQL database are ready.
 The application's CSRF trusted origins must
 include its chosen HTTPS frontend URL. HTTPS does not make the temporary SQLite
 database suitable for real user data.

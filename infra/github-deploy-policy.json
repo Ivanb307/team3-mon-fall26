@@ -39,6 +39,12 @@
       "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/nyc-active/gha/*"
     },
     {
+      "Sid": "CacheOnlyTeamBeanstalkExtensions",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/resources/_runtime/_embedded_extensions/nyc-active/*"
+    },
+    {
       "Sid": "LocateExistingBundleBucket",
       "Effect": "Allow",
       "Action": "s3:GetBucketLocation",

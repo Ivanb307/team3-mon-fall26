@@ -81,13 +81,14 @@ There are no long-lived AWS keys in GitHub. The trust policy uses the immutable
 organization/repository IDs reported by this repository's OIDC settings, plus
 the exact `refs/heads/develop` subject and `sts.amazonaws.com` audience.
 The policy/trust documents are in `infra/github-deploy-*.json`. Only the existing
-team environment, its application versions, a dedicated prefix in the existing
-source bucket, and read-only cost/pause checks are permitted. The separate
+team environment, its application versions, dedicated source-bundle and
+Beanstalk extension-cache prefixes for this application in the existing bucket,
+and read-only cost/pause checks are permitted. The separate
 personal assignment is excluded. No account/admin credentials are passed to CI.
 
 The deploy job is serialized and an active release is never cancelled by a new
 push. An older queued commit skips deployment if develop has already advanced.
-The script publishes an exact git archive as `gha-<run id>-<commit>`, excluding
+The script publishes an exact git archive as `gha-<run id>-<attempt>-<commit>`, excluding
 workflow files, infrastructure tooling, local databases and credentials.
 It changes only the existing environment's version label, retaining AllAtOnce
 deployment on one instance and the existing environment variables.

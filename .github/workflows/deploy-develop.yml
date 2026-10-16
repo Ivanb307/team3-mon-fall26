@@ -36,8 +36,7 @@ jobs:
           python -m unittest discover -s infra -p 'test_*.py'
       - name: Check deployment hook syntax
         run: |
-          bash -n .platform/hooks/prebuild/10_origin_tls.sh
-          bash -n .platform/hooks/postdeploy/20_origin_tls_timer.sh
+          find .platform/hooks .platform/confighooks -name '*.sh' -exec bash -n {} \;
 
   deploy:
     needs: test

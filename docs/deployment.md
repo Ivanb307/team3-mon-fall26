@@ -65,9 +65,55 @@ startup rather than silently using SQLite.
 migrations and collects static files, served by WhiteNoise. Health middleware
 permits internal Host headers only on `/health/`; other URLs keep host checks.
 
-No GitHub Actions or CodePipeline auto-deployment is configured. GitHub changes
-do not alter the running version until explicitly deployed. A release can later
-come from `develop` after review, using these same deployment settings.
+The manual procedure remains available for recovery. Normal updates to the
+central `develop` branch now use the workflow described below.
+
+## Automatic develop deployment
+
+`.github/workflows/deploy-develop.yml` runs on pushes and PRs targeting `develop`.
+Every run checks dependencies, Django configuration and migrations, application
+tests, infrastructure safety tests and shell hook syntax. Only a successful
+**push to the central develop branch** can obtain AWS credentials and deploy.
+Forks, feature branches, `main`, and unmerged PRs cannot publish to this environment.
+
+AWS authentication uses GitHub OIDC and the `nyc-active-github-deploy` role.
+There are no long-lived AWS keys in GitHub. The trust policy uses the immutable
+organization/repository IDs reported by this repository's OIDC settings, plus
+the exact `refs/heads/develop` subject and `sts.amazonaws.com` audience.
+The policy/trust documents are in `infra/github-deploy-*.json`. Only the existing
+team environment, its application versions, a dedicated prefix in the existing
+source bucket, and read-only cost/pause checks are permitted. The separate
+personal assignment is excluded. No account/admin credentials are passed to CI.
+
+The deploy job is serialized and an active release is never cancelled by a new
+push. An older queued commit skips deployment if develop has already advanced.
+The script publishes an exact git archive as `gha-<run id>-<commit>`, excluding
+workflow files, infrastructure tooling, local databases and credentials.
+It changes only the existing environment's version label, retaining AllAtOnce
+deployment on one instance and the existing environment variables.
+
+Before publishing and throughout the deployment wait, the script checks the
+project's $15 pre-credit budget, the distribution's enabled state, the expected
+environment identity and its unpaused single-instance Auto Scaling group.
+Missing cost data, a reached threshold, a disabled distribution or suspended
+scaling stops publication. The workflow cannot intentionally resume the budget
+guard's paused group or re-enable CloudFront. Billing remains delayed; these
+checks do not turn the budget into an exact cap.
+
+A successful run waits for Ready/Green, then checks the HTTPS homepage, its
+referenced local static assets, `/health/` and `/ready/`. If release verification
+fails and the environment is Ready and still passes the budget/pause checks,
+the script attempts to restore the preceding application version. Database
+migrations are not reversed by this operation; review backwards compatibility
+when introducing schema changes. If the environment is busy or budget-stopped,
+the workflow fails without forcing recovery.
+
+Find progress and failures under GitHub **Actions → Test and deploy develop**.
+After fixing a transient problem, use **Re-run jobs** on the existing run;
+outdated commits are skipped. Fix failed tests through a new PR. If publication
+must be suspended, disable this workflow in GitHub Actions; this does not stop
+the currently running site or its usage charges. Automatic deployment does not
+enable the still-unimplemented login/registration backend or provision a database.
 
 ## HTTPS test entry point
 

@@ -16,16 +16,25 @@ if [ ! -x /opt/nyc-active-certbot/bin/certbot ]; then
     /opt/nyc-active-certbot/bin/python -m pip install --disable-pip-version-check certbot==5.8.0
 fi
 
+acme_server_pid=""
+cleanup() {
+    if [ -n "$acme_server_pid" ]; then
+        kill "$acme_server_pid" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
 if systemctl is-active --quiet nginx; then
     # Enable HTTP-01 on the currently running server before the new proxy deploys.
     install -m 644 .platform/nginx/conf.d/elasticbeanstalk/05_acme.conf /etc/nginx/conf.d/elasticbeanstalk/05_acme.conf
     nginx -t
     systemctl reload nginx
-    authenticator=(--webroot --webroot-path /var/www/nyc-active-acme)
 else
-    authenticator=(--standalone)
+    # A new instance has no live Nginx yet. Keep webroot renewal settings by
+    # serving just the public challenge directory during initial issuance.
+    python3.12 -m http.server 80 --bind 0.0.0.0 --directory /var/www/nyc-active-acme >/var/log/nyc-active-acme-bootstrap.log 2>&1 &
+    acme_server_pid="$!"
 fi
-/opt/nyc-active-certbot/bin/certbot certonly "${authenticator[@]}" \
+/opt/nyc-active-certbot/bin/certbot certonly --webroot --webroot-path /var/www/nyc-active-acme \
     --domain "$tls_domain" --cert-name nyc-active-origin --non-interactive \
     --agree-tos --register-unsafely-without-email --keep-until-expiring
 

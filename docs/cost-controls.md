@@ -1,0 +1,82 @@
+# Costs and the requested monthly stop protection
+
+The user authorized automatic stopping of the **team test environment only**
+after AWS reports US$15 monthly usage before promotional credit deductions.
+The separate `swe1-app` individual assignment is outside this control.
+
+## Estimate
+
+For one continuously running instance in us-east-1, using a 730-hour month:
+
+| Component | Rate | Approximate monthly cost before credits/free allowances |
+| --- | --- | --- |
+| Linux t3.micro | $0.0104/hour | $7.59 |
+| 8 GiB gp3 disk, baseline IOPS/throughput | $0.08/GB-month | $0.64 |
+| One public IPv4 address | $0.005/hour | $3.65 |
+| Total baseline | | $11.88 |
+
+CloudFront requests and traffic, S3 source bundles, logs and management tasks
+are separate usage items. Applicable free allowances/credits can cover them.
+Do not assume unlimited free traffic. The hourly guard uses Lambda (128 MiB)
+and EventBridge; it does not run chargeable Cost Explorer usage queries.
+Certificate issuance/renewal uses the existing instance with no new EC2 or ALB.
+The separate individual assignment consumes the same account credit balance.
+
+Rates were checked against the AWS Price List API and official VPC pricing.
+Examples are estimates, not a bill or guaranteed credit deduction rate:
+
+- https://aws.amazon.com/vpc/pricing/
+- https://aws.amazon.com/elasticbeanstalk/pricing/
+- https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/
+
+## Installed protection
+
+- Budget: `nyc-active-monthly-15-usd`, MONTHLY COST, USD 15
+- Filter: activated cost allocation tag `Project=NYCActive`
+- Promotional credits and refunds are excluded from the usage measurement
+- Lambda: `nyc-active-budget-stop`, source `infra/budget_stop.py`
+- EventBridge: `nyc-active-budget-check-hourly`, every hour
+- Log retention: seven days
+
+The guard always reads AWS Budgets itself; event payloads cannot supply a fake
+spend, a different instance, or a different threshold. It verifies the budget
+scope and validates the environment tags and CloudFront origin before changing
+anything. Its IAM role can stop only instances tagged with this team's
+environment ID, suspend only this team's Auto Scaling group, and update only
+this team's CloudFront distribution. It has no terminate/start permissions.
+
+Once AWS reports spend >= $15, it:
+
+1. Suspends Auto Scaling launch, replacement and related processes. Otherwise
+   stopping an instance could cause Auto Scaling to launch a replacement.
+2. Disables the team's CloudFront distribution.
+3. Stops the team's running EC2 instance, preserving its disk and data.
+
+It does not delete resources or modify the personal assignment. Resuming is
+manual: review the budget first, start the team instance, resume the suspended
+Auto Scaling processes, and re-enable CloudFront using its latest ETag. If the
+same monthly spend remains >= $15, the next check will stop it again. It never
+automatically resumes at the start of a new month.
+
+## Limits of this protection
+
+This is **not an exact or instantaneous hard cap**. AWS Budgets data can lag
+8–12 hours or longer, plus up to an hour for the scheduled check. Cost Explorer
+was initialized and the project cost tag activated during setup; initial data
+and historical tag backfill can take time. A zero or missing calculated spend
+while data is preparing does not mean the environment used no resources.
+
+Stopping compute does not remove the EBS disk or Elastic IP; these can continue
+to consume roughly $4.29/month at the above baseline. Shared S3 source storage
+is not included in the project-tag budget because its bucket also serves the
+personal assignment. Future untagged resources, new services or database
+instances are not automatically covered by this guard. Review the scope when
+adding infrastructure.
+
+The AWS account remains on its Free plan. Under that plan, exhaustion of
+credits or plan expiration suspends the account unless the owner upgrades;
+this is separate from the $15 team guard. Never silently upgrade the account.
+
+- https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html
+- https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/
+- https://aws.amazon.com/free/free-tier-faqs/

@@ -27,14 +27,15 @@ Configure these through AWS environment properties, never committed files:
 | `DJANGO_ALLOWED_HOSTS` | Exact environment hostname, optionally localhost |
 | `DJANGO_DEPLOYMENT_CHECK_ONLY` | `True` |
 | `DJANGO_DATABASE_PATH` | `/var/app/data/db.sqlite3` |
-| `DJANGO_HTTPS` | `False` |
+| `DJANGO_HTTPS` | `True` |
+| `DJANGO_TLS_DOMAIN` | Exact existing Beanstalk hostname |
 
 This mode exposes only `/`, `/health/`, and `/ready/`. It deliberately excludes
-admin and account routes while the environment has only HTTP. SQLite is only
+admin and account routes for this infrastructure check. SQLite is only
 for infrastructure verification, not real user data; instance replacement can
 lose this data. `/ready/` validates SQLite, not PostgreSQL or RDS.
 
-For real application testing, configure HTTPS, set `DJANGO_HTTPS=True` and
+For real application testing, keep `DJANGO_HTTPS=True`, set
 `DJANGO_DEPLOYMENT_CHECK_ONLY=False`, and provide `DB_HOST`, `DB_NAME`,
 `DB_USER`, `DB_PASSWORD`, optionally `DB_PORT` (default 5432).
 PostgreSQL connections require TLS. Set `DJANGO_CSRF_TRUSTED_ORIGINS` to any
@@ -52,7 +53,7 @@ startup rather than silently using SQLite.
 4. Deploy that version to the **existing** test environment. When moving from
    the old skeleton, update `DJANGO_SETTINGS_MODULE` from
    `config.settings.production` to `config.production` in the same update.
-5. Wait for Ready/Green and confirm `/`, `/health/`, `/ready/` return HTTP 200.
+5. Wait for Ready/Green and confirm `/`, `/health/`, `/ready/` return 200 over HTTPS.
    Confirm `/admin/` and `/accounts/login/` return 404 in check mode.
 
 `Procfile` starts Gunicorn on port 8000. `.ebextensions/django.config` runs
@@ -71,9 +72,9 @@ come from `develop` after review, using these same deployment settings.
 - Configuration template: `infra/cloudfront.json` (excluded from the app ZIP)
 
 CloudFront uses its default trusted certificate for the assigned hostname and
-redirects browser HTTP requests to HTTPS. The original `elasticbeanstalk.com`
-hostname is still HTTP-only; adding `https://` to that hostname does not select
-the CloudFront distribution.
+redirects browser HTTP requests to HTTPS. The existing Beanstalk hostname also
+supports direct HTTPS with its own trusted certificate. The CloudFront hostname
+remains the shared frontend URL.
 
 The managed CachingDisabled policy prevents stale deployment pages and health
 checks. AllViewerExceptHostHeader forwards viewer query strings and cookies,
@@ -81,12 +82,25 @@ while setting Host to the Beanstalk origin hostname so Django's explicit host
 allowlist remains valid. No WAF, access logs, Lambda@Edge, or paid subscription
 was added.
 
-This check encrypts **browser to CloudFront** traffic. **CloudFront to Beanstalk
-still uses HTTP**, so this is not end-to-end TLS. Keep deployment-check mode
-enabled and do not expose account routes or real user data until origin HTTPS
-and trusted proxy forwarding are configured. Do not just set DJANGO_HTTPS=True
-behind the current HTTP origin; that can cause redirect loops. The future
-application's CSRF trusted origins must include its chosen HTTPS frontend URL.
+Both network legs use HTTPS: browser to CloudFront, and CloudFront to the
+Beanstalk instance. The CloudFront origin protocol is `https-only`, restricted
+to TLS 1.2. The instance's Nginx accepts TLS 1.2/1.3 and overwrites
+X-Forwarded-Proto with `https` before forwarding to Gunicorn on loopback port
+8000. Django redirects ordinary HTTP application requests to HTTPS; internal
+health probes and ACME HTTP-01 validation remain available on port 80.
+
+The prebuild hook obtains a free Let's Encrypt certificate for DJANGO_TLS_DOMAIN
+using HTTP-01. Keys stay in `/etc/letsencrypt/` on the instance; they are never
+committed or uploaded in the application ZIP. The postdeploy hook installs a
+systemd timer that checks renewal twice daily and reloads Nginx after renewal.
+If no TLS domain is configured, these hooks do nothing. Instance replacement
+will need fresh certificate issuance, subject to the certificate authority's
+availability and limits. Maintain the same hostname and public DNS routing.
+
+Keep deployment-check mode enabled until the team's actual features and
+PostgreSQL database are ready. The application's CSRF trusted origins must
+include its chosen HTTPS frontend URL. HTTPS does not make the temporary SQLite
+database suitable for real user data.
 
 The distribution uses pay-as-you-go pricing with CloudFront's applicable free
 usage allowance; it is not subscribed to a flat-rate plan. AWS Free Tier accounts

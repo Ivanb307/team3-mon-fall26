@@ -26,13 +26,19 @@ checks database connectivity. Run `python manage.py test` for deployment tests.
 The existing single-instance Elastic Beanstalk test environment uses
 `config.production`, which extends the team's settings. See
 [deployment instructions](docs/deployment.md) for environment variables,
-packaging, and the limitations of the temporary HTTP check.
+packaging, and the limitations of the temporary infrastructure check.
 
 Deployment is manual. Pushing or merging GitHub branches does not update AWS.
 This project uses Django 5.2 LTS because Django 4.2 support ended in April 2026.
 
 The HTTPS deployment-check URL is https://dgaeptdmd25z5.cloudfront.net/.
 CloudFront supplies the browser-facing certificate and redirects HTTP to HTTPS.
-Its connection to the existing Beanstalk instance currently uses HTTP; the
-check still exposes no account routes. See the deployment guide before adding
-real user data or authentication.
+Its connection to the existing Beanstalk instance also uses HTTPS, with a
+Let's Encrypt certificate renewed on the same instance. Check mode still
+exposes no account routes. See the deployment guide before adding real user
+data or authentication.
+
+The team has a US$15 monthly usage budget before promotional credits. An hourly
+guard stops only the existing team environment after AWS reports that threshold.
+Billing/tag data is delayed, so this is not a precise spending cap; disk and IP
+costs can continue after stopping. See [cost controls](docs/cost-controls.md).

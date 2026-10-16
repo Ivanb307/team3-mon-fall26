@@ -53,6 +53,17 @@ class AutomaticDeploymentTests(unittest.TestCase):
             deploy.preflight(self.clients)
         self.clients["autoscaling"].resume_processes.assert_not_called()
 
+    def test_budget_stop_tag_blocks_even_if_processes_were_manually_resumed(self):
+        self.group["Tags"].append({"Key": deploy.BUDGET_STOP_TAG, "Value": "true"})
+        for require_ready in [True, False]:
+            with self.assertRaisesRegex(RuntimeError, "paused"):
+                deploy.preflight(self.clients, require_ready=require_ready)
+
+    def test_in_progress_release_allows_beanstalk_temporary_health_check_pause(self):
+        self.group["SuspendedProcesses"] = [{"ProcessName": "HealthCheck"}]
+        self.environment["Status"] = "Updating"
+        self.assertEqual(deploy.preflight(self.clients, require_ready=False), self.environment)
+
     def test_replaced_environment_is_rejected(self):
         self.environment["EnvironmentId"] = "e-personal"
         with self.assertRaisesRegex(RuntimeError, "identity changed"):

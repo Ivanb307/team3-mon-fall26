@@ -37,6 +37,7 @@ class BudgetStopTests(unittest.TestCase):
         }
 
     def assert_no_changes(self):
+        self.clients["autoscaling"].create_or_update_tags.assert_not_called()
         self.clients["autoscaling"].suspend_processes.assert_not_called()
         self.clients["cloudfront"].update_distribution.assert_not_called()
         self.clients["ec2"].stop_instances.assert_not_called()
@@ -67,6 +68,12 @@ class BudgetStopTests(unittest.TestCase):
     def test_threshold_suspends_replacement_disables_cf_and_stops_team(self):
         result = handler({}, None, self.clients)
         self.assertEqual(result["action"], "stop_team_environment")
+        self.clients["autoscaling"].create_or_update_tags.assert_called_once_with(Tags=[{
+            "ResourceId": "team-group", "ResourceType": "auto-scaling-group",
+            "Key": "nyc-active:budget-stopped", "Value": "true", "PropagateAtLaunch": False,
+        }])
+        self.assertEqual([c[0] for c in self.clients["autoscaling"].method_calls[-2:]],
+                         ["create_or_update_tags", "suspend_processes"])
         processes = self.clients["autoscaling"].suspend_processes.call_args.kwargs["ScalingProcesses"]
         self.assertIn("ReplaceUnhealthy", processes)
         self.assertIn("Launch", processes)

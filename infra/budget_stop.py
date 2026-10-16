@@ -67,6 +67,12 @@ def handler(event, context, clients=None):
               "limit_usd": str(limit), "instances": running, "distribution": distribution_id}
     if event.get("dry_run") is True:
         return {**result, "action": "dry_run"}
+    # Latch the budget stop before pausing: deployment IAM refuses to resume
+    # this group while tagged, including Beanstalk's internal cleanup calls.
+    clients["autoscaling"].create_or_update_tags(Tags=[{
+        "ResourceId": group_name, "ResourceType": "auto-scaling-group",
+        "Key": "nyc-active:budget-stopped", "Value": "true", "PropagateAtLaunch": False,
+    }])
     # Pausing replacement is essential: stopping an instance alone can make ASG
     # launch a billable replacement. Preserve the instance and its disk, not delete it.
     clients["autoscaling"].suspend_processes(

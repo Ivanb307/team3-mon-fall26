@@ -54,15 +54,15 @@
       ]
     },
     {
-      "Sid": "CleanOnlyTeamRuntimeVersionCopies",
+      "Sid": "CleanOnlyExistingTeamEnvironmentFiles",
       "Effect": "Allow",
       "Action": "s3:DeleteObject",
-      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/resources/environments/e-c27h4y6per/_runtime/_versions/nyc-active/*"
+      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/resources/environments/e-c27h4y6per/*"
     },
     {
-      "Sid": "LocateExistingBundleBucket",
+      "Sid": "ReadExistingBundleBucketMetadata",
       "Effect": "Allow",
-      "Action": ["s3:GetBucketLocation", "s3:GetBucketAcl", "s3:ListBucket"],
+      "Action": ["s3:Get*", "s3:ListBucket"],
       "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760"
     },
     {
@@ -86,6 +86,31 @@
       "Effect": "Allow",
       "Action": "cloudfront:GetDistribution",
       "Resource": "arn:aws:cloudfront::287872994760:distribution/E1YOQE0SL33H2U"
+    },
+    {
+      "Sid": "ReadInstanceAndLaunchTemplateMetadata",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ec2:DescribeImages",
+        "ec2:DescribeLaunchTemplates", "ec2:DescribeLaunchTemplateVersions",
+        "ec2:DescribeSecurityGroups", "ec2:DescribeSubnets", "ec2:DescribeVpcs",
+        "ec2:DescribeAvailabilityZones", "ec2:DescribeTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowDeploymentProcessChangesUnlessBudgetStopped",
+      "Effect": "Allow",
+      "Action": ["autoscaling:SuspendProcesses", "autoscaling:ResumeProcesses"],
+      "Resource": "arn:aws:autoscaling:us-east-1:287872994760:autoScalingGroup:8e7ada46-f5b7-4769-a867-8aed2124a4c5:autoScalingGroupName/awseb-e-c27h4y6per-stack-AWSEBAutoScalingGroup-UQYtDQcWnyDe",
+      "Condition": {"StringNotEquals": {"autoscaling:ResourceTag/nyc-active:budget-stopped": "true"}}
+    },
+    {
+      "Sid": "NeverResumeBudgetStoppedTeamGroup",
+      "Effect": "Deny",
+      "Action": "autoscaling:ResumeProcesses",
+      "Resource": "arn:aws:autoscaling:us-east-1:287872994760:autoScalingGroup:8e7ada46-f5b7-4769-a867-8aed2124a4c5:autoScalingGroupName/awseb-e-c27h4y6per-stack-AWSEBAutoScalingGroup-UQYtDQcWnyDe",
+      "Condition": {"StringEquals": {"autoscaling:ResourceTag/nyc-active:budget-stopped": "true"}}
     },
     {
       "Sid": "CheckCapacityAndSuspensionState",

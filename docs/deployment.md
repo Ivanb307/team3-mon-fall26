@@ -88,9 +88,10 @@ personal assignment is excluded. No account/admin credentials are passed to CI.
 Beanstalk source validation also needs bucket location, ACL and key-listing
 reads. Object-content reads and writes remain scoped to this application's
 bundle, cache and team runtime prefixes; the role cannot deploy to the personal environment.
-It may read older team source bundles for rollback and remove generated runtime
-version copies only under this environment's `_runtime/_versions/nyc-active/`
-prefix. It also reads only the existing team's CloudFormation stack metadata;
+It may read older team source bundles for rollback and clean generated deployment
+files only under this existing environment's `resources/environments/e-c27h4y6per/`
+prefix. It cannot delete original source bundles or another environment's files.
+It also reads only the existing team's CloudFormation stack metadata;
 there are no stack-creation or instance-start permissions.
 
 The deploy job is serialized and an active release is never cancelled by a new
@@ -103,9 +104,13 @@ deployment on one instance and the existing environment variables.
 Before publishing and throughout the deployment wait, the script checks the
 project's $15 pre-credit budget, the distribution's enabled state, the expected
 environment identity and its unpaused single-instance Auto Scaling group.
-Missing cost data, a reached threshold, a disabled distribution or suspended
-scaling stops publication. The script never resumes the budget
-guard's paused group or re-enables CloudFront. Billing remains delayed; these
+Missing cost data, a reached threshold, a disabled distribution or a latched
+budget stop blocks publication. Starting a release also requires unpaused
+scaling. During an active update, Beanstalk's temporary health-check suspension
+is permitted. IAM allows Beanstalk to suspend/resume only this group's normal
+deployment processes, but explicitly denies resuming when the guard has set
+`nyc-active:budget-stopped=true`. CI cannot clear that tag, start instances or
+re-enable CloudFront. Billing remains delayed; these
 checks do not turn the budget into an exact cap.
 
 A successful run waits for Ready/Green, then checks the HTTPS homepage, its

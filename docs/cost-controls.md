@@ -54,13 +54,17 @@ this team's CloudFront distribution. It has no terminate/start permissions.
 
 Once AWS reports spend >= $15, it:
 
-1. Suspends Auto Scaling launch, replacement and related processes. Otherwise
+1. Sets `nyc-active:budget-stopped=true` on the team's Auto Scaling group, then
+   suspends launch, replacement and related processes. The deployment role is
+   explicitly denied resuming a group carrying that tag and cannot clear it.
+   Otherwise
    stopping an instance could cause Auto Scaling to launch a replacement.
 2. Disables the team's CloudFront distribution.
 3. Stops the team's running EC2 instance, preserving its disk and data.
 
 It does not delete resources or modify the personal assignment. Resuming is
-manual: review the budget first, start the team instance, resume the suspended
+manual: review the budget first, clear the budget-stop tag with owner permissions,
+start the team instance, resume the suspended
 Auto Scaling processes, and re-enable CloudFront using its latest ETag. If the
 same monthly spend remains >= $15, the next check will stop it again. It never
 automatically resumes at the start of a new month.

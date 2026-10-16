@@ -21,6 +21,7 @@ DISTRIBUTION = "E1YOQE0SL33H2U"
 ASG = "awseb-e-c27h4y6per-stack-AWSEBAutoScalingGroup-UQYtDQcWnyDe"
 BUCKET = "elasticbeanstalk-us-east-1-" + ACCOUNT
 BUDGET = "nyc-active-monthly-15-usd"
+BUDGET_STOP_TAG = "nyc-active:budget-stopped"
 
 
 def preflight(clients, require_ready=True):
@@ -53,7 +54,8 @@ def preflight(clients, require_ready=True):
     tags = {t["Key"]: t["Value"] for t in group.get("Tags", [])}
     if (tags.get("elasticbeanstalk:environment-id") != ENVIRONMENT_ID
             or any(group[k] != 1 for k in ["DesiredCapacity", "MinSize", "MaxSize"])
-            or group.get("SuspendedProcesses")):
+            or tags.get(BUDGET_STOP_TAG) == "true"
+            or (require_ready and group.get("SuspendedProcesses"))):
         raise RuntimeError("Team capacity is changed or paused; deployment must not resume it")
     return environment
 

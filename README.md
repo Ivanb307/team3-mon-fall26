@@ -17,8 +17,8 @@ python manage.py runserver
 ```
 
 Open http://127.0.0.1:8000/. `config/settings.py` remains the local development
-configuration. The temporary home page only verifies the application runs;
-the frontend team can replace it. `/health/` checks the process, and `/ready/`
+configuration. The home page renders the team's landing-page design.
+`/health/` checks the process, and `/ready/`
 checks database connectivity. Run `python manage.py test` for deployment tests.
 
 ## AWS
@@ -28,7 +28,10 @@ The existing single-instance Elastic Beanstalk test environment uses
 [deployment instructions](docs/deployment.md) for environment variables,
 packaging, and the limitations of the temporary infrastructure check.
 
-Deployment is manual. Pushing or merging GitHub branches does not update AWS.
+Pushes and merged PRs to the central repository's `develop` branch run tests
+and then automatically deploy to the existing AWS test environment. Other
+branches and fork PRs do not deploy. Track the run under GitHub **Actions →
+Test and deploy develop**. See the deployment guide for safeguards and recovery.
 This project uses Django 5.2 LTS because Django 4.2 support ended in April 2026.
 
 The HTTPS deployment-check URL is https://dgaeptdmd25z5.cloudfront.net/.

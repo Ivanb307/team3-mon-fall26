@@ -22,6 +22,13 @@ and EventBridge; it does not run chargeable Cost Explorer usage queries.
 Certificate issuance/renewal uses the existing instance with no new EC2 or ALB.
 The separate individual assignment consumes the same account credit balance.
 
+Automatic develop deployment uses standard GitHub-hosted Linux runners for this
+public repository. It adds no AWS build service or server. Source bundles use a
+dedicated prefix in the existing S3 bucket; storage/request usage can still accrue.
+No GitHub cache or artifact uploads are configured. The deployment script checks
+the same budget and refuses to publish while the team group/distribution is
+paused; it does not restart resources after the budget guard stops them.
+
 Rates were checked against the AWS Price List API and official VPC pricing.
 Examples are estimates, not a bill or guaranteed credit deduction rate:
 

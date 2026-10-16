@@ -9,3 +9,4 @@ Procfile text eol=lf
 .gitattributes export-ignore
 docs/ export-ignore
 infra/ export-ignore
+.github/ export-ignore

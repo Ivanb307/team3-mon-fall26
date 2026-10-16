@@ -1,0 +1,66 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadTeamReleaseState",
+      "Effect": "Allow",
+      "Action": ["elasticbeanstalk:DescribeEnvironments", "elasticbeanstalk:DescribeEvents"],
+      "Resource": "arn:aws:elasticbeanstalk:us-east-1:287872994760:environment/nyc-active/nyc-active-demo-287872994760"
+    },
+    {
+      "Sid": "ReadTeamVersions",
+      "Effect": "Allow",
+      "Action": "elasticbeanstalk:DescribeApplicationVersions",
+      "Resource": "arn:aws:elasticbeanstalk:us-east-1:287872994760:applicationversion/nyc-active/*"
+    },
+    {
+      "Sid": "CreateOnlyWorkflowVersions",
+      "Effect": "Allow",
+      "Action": "elasticbeanstalk:CreateApplicationVersion",
+      "Resource": [
+        "arn:aws:elasticbeanstalk:us-east-1:287872994760:application/nyc-active",
+        "arn:aws:elasticbeanstalk:us-east-1:287872994760:applicationversion/nyc-active/gha-*"
+      ]
+    },
+    {
+      "Sid": "ReleaseOrRollbackOnlyTheTeamEnvironment",
+      "Effect": "Allow",
+      "Action": "elasticbeanstalk:UpdateEnvironment",
+      "Resource": "arn:aws:elasticbeanstalk:us-east-1:287872994760:environment/nyc-active/nyc-active-demo-287872994760",
+      "Condition": {
+        "StringEquals": {"elasticbeanstalk:InApplication": "arn:aws:elasticbeanstalk:us-east-1:287872994760:application/nyc-active"},
+        "ArnLike": {"elasticbeanstalk:FromApplicationVersion": "arn:aws:elasticbeanstalk:us-east-1:287872994760:applicationversion/nyc-active/*"}
+      }
+    },
+    {
+      "Sid": "StoreOnlyTeamWorkflowBundles",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760/nyc-active/gha/*"
+    },
+    {
+      "Sid": "LocateExistingBundleBucket",
+      "Effect": "Allow",
+      "Action": "s3:GetBucketLocation",
+      "Resource": "arn:aws:s3:::elasticbeanstalk-us-east-1-287872994760"
+    },
+    {
+      "Sid": "ReadTeamBudget",
+      "Effect": "Allow",
+      "Action": "budgets:ViewBudget",
+      "Resource": "arn:aws:budgets::287872994760:budget/nyc-active-monthly-15-usd"
+    },
+    {
+      "Sid": "CheckThatTeamDistributionIsEnabled",
+      "Effect": "Allow",
+      "Action": "cloudfront:GetDistribution",
+      "Resource": "arn:aws:cloudfront::287872994760:distribution/E1YOQE0SL33H2U"
+    },
+    {
+      "Sid": "CheckCapacityAndSuspensionState",
+      "Effect": "Allow",
+      "Action": "autoscaling:DescribeAutoScalingGroups",
+      "Resource": "*"
+    }
+  ]
+}

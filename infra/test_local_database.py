@@ -33,7 +33,7 @@ class LocalDatabaseTests(unittest.TestCase):
                 patch.object(database.Path, "glob", return_value=iter([Path("/venv/bin/python")])), \
                 patch.dict(os.environ, {"HOME": "/root"}):
             database.migrate()
-        child = run.call_args.kwargs["env"]
+        child = run.call_args_list[0].kwargs["env"]
         self.assertEqual(child["HOME"], "/var/app")
         self.assertEqual(child["USER"], "webapp")
         self.assertEqual(child["DB_PASSWORD"], environment["DB_PASSWORD"])

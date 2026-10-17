@@ -13,12 +13,13 @@
 </head>
 <body>
   {% block header %}
-    {% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'logout' as logout_url %}
+    {% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'logout' as logout_url %}{% url 'event_create' as event_create_url %}
     <header class="site-header">
       <a class="brand" href="/">{% include "includes/logo.html" %}</a>
       <nav class="site-nav" aria-label="Account">
         {% if user.is_authenticated %}
           <span class="site-nav-user">{{ user.username }}</span>
+          <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>
           <form method="post" action="{{ logout_url|default:'/logout/' }}">
             {% csrf_token %}
             <button type="submit" class="btn btn--ghost">Log out</button>

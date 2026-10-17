@@ -37,6 +37,20 @@ class LocalDatabaseTests(unittest.TestCase):
         self.assertEqual(child["HOME"], "/var/app")
         self.assertEqual(child["USER"], "webapp")
         self.assertEqual(child["DB_PASSWORD"], environment["DB_PASSWORD"])
+        self.assertIn("sync_parks", run.call_args_list[1].args[0])
+
+    def test_periodic_parks_sync_runs_as_webapp_and_backs_up(self):
+        environment = self.valid_environment()
+        with patch.object(database, "environment", return_value=environment), \
+                patch.object(database, "backup") as backup, patch.object(database, "run") as run, \
+                patch.object(database.Path, "glob", return_value=iter([Path("/venv/bin/python")])):
+            database.sync_parks()
+        run.assert_called_once()
+        self.assertIn("sync_parks", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["cwd"], "/var/app/current")
+        self.assertEqual(run.call_args.kwargs["env"]["USER"], "webapp")
+        self.assertEqual(run.call_args.kwargs["env"]["DJANGO_SETTINGS_MODULE"], "config.production")
+        backup.assert_called_once()
 
     def test_local_mode_refuses_network_hosts_or_another_projects_backup_bucket(self):
         for key, value in [("DB_HOST", "0.0.0.0"), ("DB_NAME", "other_project"),

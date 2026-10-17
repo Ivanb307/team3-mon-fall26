@@ -89,6 +89,16 @@ Systems Manager access on the existing instance role enables maintenance without
 opening SSH. Check backup service failures with
 `journalctl -u nyc-active-db-backup.service`, and confirm the latest S3 timestamp.
 
+Migration hooks also run `python manage.py sync_parks --if-empty --ignore-errors`
+before taking the post-migration backup so a newly initialized database is
+automatically populated with NYC Parks Properties (`enfh-gkve`) and Athletic
+Facilities (`qnem-b8re`) from NYC Open Data. In addition, setup installs
+`nyc-active-parks-sync.timer` to refresh park and facility records weekly as
+the unprivileged `webapp` user (preserving any records with
+`admin_modified=True`) and immediately write an encrypted S3 backup. See
+[NYC Parks & Athletic Facilities data seeding](parks-data-seeding.md) for full
+details and CLI options.
+
 ## Manual release
 
 1. Test the intended commit: `python manage.py test` and `python manage.py check`.

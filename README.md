@@ -13,12 +13,15 @@ python -m venv .venv
 # macOS/Linux: source .venv/bin/activate
 python -m pip install -r requirements.txt
 python manage.py migrate
+python manage.py sync_parks
 python manage.py runserver
 ```
 
 Open http://127.0.0.1:8000/. `config/settings.py` remains the local development
-configuration. The home page renders the team's landing-page design.
-`/health/` checks the process, and `/ready/`
+configuration. `python manage.py sync_parks` populates `db.sqlite3` with NYC
+parks and athletic facilities from NYC Open Data (see
+[parks data seeding](docs/parks-data-seeding.md)). The home page renders the
+team's landing-page design. `/health/` checks the process, and `/ready/`
 checks database connectivity. Run `python manage.py test` for deployment tests.
 
 ## AWS

@@ -191,9 +191,46 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 """, 0o644)
+    write_changed(Path("/etc/systemd/system/nyc-active-parks-sync.service"), """[Unit]
+Description=Refresh NYC Parks and Athletic Facilities from NYC Open Data
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/app/current
+ExecStart=/usr/bin/python3.12 /opt/nyc-active-db/local_database.py sync_parks
+TimeoutStartSec=300
+Nice=10
+UMask=0077
+""", 0o644)
+    write_changed(Path("/etc/systemd/system/nyc-active-parks-sync.timer"), """[Unit]
+Description=Weekly NYC Open Data parks and facilities sync
+
+[Timer]
+OnCalendar=Sun *-*-* 04:15:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+""", 0o644)
     run(["systemctl", "daemon-reload"])
     run(["systemctl", "enable", "--now", "nyc-active-db-backup.timer"])
-    print("Local PostgreSQL is ready; encrypted hourly backups are enabled", flush=True)
+    run(["systemctl", "enable", "--now", "nyc-active-parks-sync.timer"])
+    print("Local PostgreSQL is ready; encrypted hourly backups and weekly park syncs are enabled", flush=True)
+
+
+def sync_parks():
+    env = environment()
+    os.environ.update(env)
+    if not validate(env):
+        return
+    executable = next(Path("/var/app/venv").glob("*/bin/python"))
+    child_env = {**os.environ, "HOME": "/var/app", "USER": "webapp", "LOGNAME": "webapp"}
+    run(["runuser", "-u", "webapp", "--preserve-environment", "--",
+         str(executable), "/var/app/current/manage.py", "sync_parks", "--ignore-errors"], env=child_env)
+    backup()
 
 
 def migrate():
@@ -208,6 +245,9 @@ def migrate():
     child_env = {**os.environ, "HOME": "/var/app", "USER": "webapp", "LOGNAME": "webapp"}
     run(["runuser", "-u", "webapp", "--preserve-environment", "--",
          str(executable), "manage.py", "migrate", "--noinput"], env=child_env)
+    if local:
+        run(["runuser", "-u", "webapp", "--preserve-environment", "--",
+             str(executable), "manage.py", "sync_parks", "--if-empty", "--ignore-errors"], env=child_env)
     # Configuration deployments rebuild staging but skip container_commands.
     # Like the existing app-deployment collectstatic command, run as root so
     # previously collected root-owned files can be replaced safely.
@@ -217,4 +257,4 @@ def migrate():
 
 
 if __name__ == "__main__":
-    {"setup": setup, "migrate": migrate, "backup": backup}[sys.argv[1]]()
+    {"setup": setup, "migrate": migrate, "backup": backup, "sync_parks": sync_parks}[sys.argv[1]]()

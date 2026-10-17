@@ -157,6 +157,7 @@ class Command(BaseCommand):
                         "longitude",
                         "waterfront",
                         "is_retired",
+                        "updated_at",
                     ],
                 )
 
@@ -204,6 +205,7 @@ class Command(BaseCommand):
                         "feature_status",
                         "is_lighted",
                         "is_accessible",
+                        "updated_at",
                     ],
                 )
 

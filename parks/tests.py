@@ -118,6 +118,19 @@ class SyncParksCommandTests(TestCase):
         facility.refresh_from_db()
         self.assertEqual(park.name, 'Admin Custom Park Name')
         self.assertEqual(facility.primary_sport, 'CUSTOM')
+        b237 = Park.objects.get(gispropnum='B237')
+        self.assertEqual(b237.name, 'Stockton Playground')
+
+        # A subsequent weekly sync updates unmodified records in place without duplicating rows
+        updated_parks = [
+            SAMPLE_PARKS[0],
+            {**SAMPLE_PARKS[1], 'signname': 'Stockton Playground Updated'},
+        ]
+        mock_fetch.side_effect = [updated_parks, SAMPLE_FACILITIES]
+        call_command('sync_parks', stdout=StringIO())
+        self.assertEqual(Park.objects.count(), 2)
+        b237.refresh_from_db()
+        self.assertEqual(b237.name, 'Stockton Playground Updated')
 
     @patch('parks.management.commands.sync_parks.fetch_json')
     def test_if_empty_skips_api_call_when_parks_exist(self, mock_fetch):

@@ -47,7 +47,9 @@ class LocalDatabaseTests(unittest.TestCase):
             database.sync_parks()
         run.assert_called_once()
         self.assertIn("sync_parks", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["cwd"], "/var/app/current")
         self.assertEqual(run.call_args.kwargs["env"]["USER"], "webapp")
+        self.assertEqual(run.call_args.kwargs["env"]["DJANGO_SETTINGS_MODULE"], "config.production")
         backup.assert_called_once()
 
     def test_local_mode_refuses_network_hosts_or_another_projects_backup_bucket(self):

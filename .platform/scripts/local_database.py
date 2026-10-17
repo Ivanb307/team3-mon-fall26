@@ -227,9 +227,16 @@ def sync_parks():
     if not validate(env):
         return
     executable = next(Path("/var/app/venv").glob("*/bin/python"))
-    child_env = {**os.environ, "HOME": "/var/app", "USER": "webapp", "LOGNAME": "webapp"}
+    child_env = {
+        **os.environ,
+        "DJANGO_SETTINGS_MODULE": env.get("DJANGO_SETTINGS_MODULE", "config.production"),
+        "HOME": "/var/app",
+        "USER": "webapp",
+        "LOGNAME": "webapp",
+    }
     run(["runuser", "-u", "webapp", "--preserve-environment", "--",
-         str(executable), "/var/app/current/manage.py", "sync_parks", "--ignore-errors"], env=child_env)
+         str(executable), "manage.py", "sync_parks", "--ignore-errors"],
+        cwd="/var/app/current", env=child_env)
     backup()
 
 

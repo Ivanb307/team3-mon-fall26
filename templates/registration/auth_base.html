@@ -30,7 +30,9 @@
 
       {% block auth_form %}{% endblock %}
 
-      <p class="auth-switch">{% block auth_switch %}{% endblock %}</p>
+      {% block auth_switch_wrapper %}
+        <p class="auth-switch">{% block auth_switch %}{% endblock %}</p>
+      {% endblock %}
     </div>
   </div>
 </main>

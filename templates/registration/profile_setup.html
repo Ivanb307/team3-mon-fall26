@@ -1,14 +1,15 @@
 {% extends "registration/auth_base.html" %}
 {% load static %}
 
-{% block title %}Profile details · NYC Active{% endblock %}
-{% block auth_title %}Complete your profile{% endblock %}
-{% block auth_subtitle %}These details are optional. You can skip them and add them later.{% endblock %}
+{% block title %}{% if is_edit %}Edit your profile{% else %}Profile details{% endif %} · NYC Active{% endblock %}
+{% block auth_title %}{% if is_edit %}Edit your profile{% else %}Complete your profile{% endif %}{% endblock %}
+{% block auth_subtitle %}{% if is_edit %}Update the details other NYC Active members see.{% else %}These details are optional. You can skip them and add them later.{% endif %}{% endblock %}
 
 {% block auth_form %}
-<form method="post" class="auth-form">
+<form method="post" class="auth-form" autocomplete="off">
   {% csrf_token %}
   {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+  {% include "includes/form_field.html" with field=form.display_username %}
   {% include "includes/form_field.html" with field=form.first_name %}
   {% include "includes/form_field.html" with field=form.last_name %}
   {% include "includes/form_field.html" with field=form.home_borough %}
@@ -38,7 +39,9 @@
   {% include "includes/form_field.html" with field=form.skill_level %}
   <div class="profile-setup-actions">
     <button type="submit" class="btn btn--primary btn--block">Save profile details</button>
-    <a class="btn btn--ghost btn--block" href="{% url 'home' %}">Skip for now</a>
+    {% if not is_edit %}
+      <a class="btn btn--ghost btn--block" href="{% url 'home' %}">Skip for now</a>
+    {% endif %}
   </div>
 </form>
 {% endblock %}

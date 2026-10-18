@@ -44,10 +44,13 @@ class RegisterForm(UserCreationForm):
         for name, text in placeholders.items():
             self.fields[name].widget.attrs['placeholder'] = text
             self.fields[name].help_text = ''
-        self.fields['username'].label = 'Username'
-        self.fields['username'].help_text = 'This is the name other members will see.'
+            self.fields[name].widget.attrs['autocomplete'] = 'off'
+        self.fields['username'].label = 'Login username'
+        self.fields['username'].help_text = 'This login username is only used to login. Other members see your profile username.'
         self.fields['password1'].help_text = 'At least 8 characters, not too common or all numbers.'
         self.fields['password2'].label = 'Confirm password'
+        self.fields['password1'].widget.attrs['autocomplete'] = 'new-password'
+        self.fields['password2'].widget.attrs['autocomplete'] = 'new-password'
 
     def clean_email(self):
         email = self.cleaned_data['email']
@@ -57,6 +60,12 @@ class RegisterForm(UserCreationForm):
 
 
 class ProfileSetupForm(forms.ModelForm):
+    display_username = forms.CharField(
+        max_length=150,
+        label='Username',
+        required=False,
+        help_text='This is the name other members see. It does not change your login username.',
+    )
     first_name = forms.CharField(
         max_length=150,
         label='First name',
@@ -84,14 +93,24 @@ class ProfileSetupForm(forms.ModelForm):
 
     class Meta:
         model = Profile
-        fields = ('home_borough', 'favorite_sports', 'skill_level')
+        fields = ('display_username', 'home_borough', 'favorite_sports', 'skill_level')
         labels = {
             'home_borough': 'Home borough',
             'skill_level': 'Overall skill level',
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if user is not None:
+            self.fields['display_username'].widget.attrs['placeholder'] = user.username
+            if not self.is_bound:
+                if not self.initial.get('display_username'):
+                    self.initial['display_username'] = user.username
+                self.initial.setdefault('first_name', user.first_name)
+                self.initial.setdefault('last_name', user.last_name)
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.CheckboxSelectMultiple):
+                field.widget.attrs['autocomplete'] = 'off'
         self.fields['home_borough'].required = False
         self.fields['home_borough'].choices = [('', 'Choose your borough'), *Borough.choices]
         self.fields['skill_level'].required = False
@@ -106,8 +125,21 @@ class ProfileSetupForm(forms.ModelForm):
             if custom_sport:
                 submitted_sports.append(custom_sport)
         choices = list(COMMON_SPORTS)
+        if self.instance and self.instance.pk:
+            choices.extend(
+                sport for sport in self.instance.favorite_sports
+                if sport not in choices
+            )
         choices.extend(sport for sport in submitted_sports if sport not in choices)
         self.fields['favorite_sports'].choices = [(sport, sport) for sport in choices]
+
+    def clean_display_username(self):
+        display_username = self.cleaned_data['display_username'].strip()
+        if display_username and Profile.objects.filter(
+            display_username__iexact=display_username
+        ).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('That profile username is already in use.')
+        return display_username
 
     def clean_favorite_sports(self):
         return self.normalize_sports(self.cleaned_data['favorite_sports'])
@@ -150,4 +182,6 @@ class LoginForm(AuthenticationForm):
         super().__init__(*args, **kwargs)
         self.fields['username'].label = 'Email or username'
         self.fields['username'].widget.attrs['placeholder'] = 'you@example.com'
+        self.fields['username'].widget.attrs['autocomplete'] = 'off'
         self.fields['password'].widget.attrs['placeholder'] = 'Password'
+        self.fields['password'].widget.attrs['autocomplete'] = 'current-password'

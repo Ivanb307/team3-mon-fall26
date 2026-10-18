@@ -23,6 +23,7 @@ class RegisterTests(TestCase):
         data = {
             'first_name': 'Park',
             'last_name': 'Fan',
+            'display_username': 'ParkFan42',
             'home_borough': 'M',
             'favorite_sports': ['Basketball', 'Running', 'basketball'],
             'skill_level': 'beginner',
@@ -34,6 +35,9 @@ class RegisterTests(TestCase):
         response = self.client.get(reverse('register'))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'registration/register.html')
+        self.assertIn('<form method="post" class="auth-form" autocomplete="off">', response.content.decode())
+        self.assertContains(response, 'name="username"')
+        self.assertContains(response, 'autocomplete="off"')
 
     def test_profile_setup_requires_login(self):
         self.assertRedirects(self.client.get(reverse('register_profile')), reverse('register'))
@@ -46,6 +50,7 @@ class RegisterTests(TestCase):
         self.assertNotEqual(user.password, PASSWORD)
         self.assertEqual(int(self.client.session['_auth_user_id']), user.pk)
         profile = Profile.objects.get(user=user)
+        self.assertEqual(profile.display_username, '')
         self.assertEqual(profile.home_borough, '')
         self.assertEqual(profile.favorite_sports, [])
         self.assertEqual(profile.skill_level, '')
@@ -55,8 +60,14 @@ class RegisterTests(TestCase):
         response = self.client.get(reverse('register_profile'))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'registration/profile_setup.html')
+        self.assertContains(response, '<h1 class="auth-title">Complete your profile</h1>', html=True)
+        self.assertContains(response, 'name="display_username"')
+        self.assertContains(response, 'value="parkfan"')
+        self.assertContains(response, 'Skip for now')
         self.assertContains(response, 'placeholder="John"')
         self.assertContains(response, 'placeholder="Doe"')
+        self.assertIn('<form method="post" class="auth-form" autocomplete="off">', response.content.decode())
+        self.assertContains(response, 'autocomplete="off"')
         self.assertNotContains(response, 'Search sports')
         self.assertContains(response, '<details class="profile-sport-dropdown"', html=False)
         self.assertContains(response, 'name="favorite_sports"')
@@ -65,6 +76,7 @@ class RegisterTests(TestCase):
         self.assertNotContains(response, 'Separate multiple sports with commas.')
 
         response = self.post_profile(
+            display_username='',
             first_name='',
             last_name='',
             home_borough='',
@@ -83,6 +95,7 @@ class RegisterTests(TestCase):
     def test_profile_details_can_be_updated_later(self):
         self.post_register()
         self.client.post(reverse('register_profile'), {
+            'display_username': 'ParkFan42',
             'first_name': 'Park',
             'last_name': 'Fan',
             'home_borough': 'M',
@@ -93,10 +106,82 @@ class RegisterTests(TestCase):
         self.post_profile(first_name='Park', last_name='Fan', favorite_sports=['Tennis'], skill_level='competitive')
         profile = Profile.objects.get(user__username='parkfan')
         self.assertEqual(profile.home_borough, 'M')
+        self.assertEqual(profile.display_username, 'ParkFan42')
         self.assertEqual(profile.favorite_sports, ['Tennis'])
         self.assertEqual(profile.skill_level, 'competitive')
         user = User.objects.get(username='parkfan')
         self.assertEqual((user.first_name, user.last_name), ('Park', 'Fan'))
+        self.assertEqual(user.username, 'parkfan')
+
+    def test_edit_profile_prefills_existing_information_without_skip_link(self):
+        user = User.objects.create_user(
+            'loginname', 'login@nyu.edu', PASSWORD, first_name='Taylor', last_name='Runner'
+        )
+        profile = Profile.objects.create(
+            user=user,
+            display_username='TrackStar',
+            home_borough='Q',
+            favorite_sports=['Soccer'],
+            skill_level='intermediate',
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('edit_profile'))
+
+        self.assertContains(response, '<h1 class="auth-title">Edit your profile</h1>', html=True)
+        self.assertContains(response, 'value="TrackStar"')
+        self.assertContains(response, 'value="Taylor"')
+        self.assertContains(response, 'value="Runner"')
+        self.assertContains(response, 'value="Soccer"')
+        self.assertNotContains(response, 'Skip for now')
+        self.assertEqual(response.context['form'].instance, profile)
+
+    def test_editing_public_username_does_not_change_login_username(self):
+        user = User.objects.create_user('loginname', 'login@nyu.edu', PASSWORD)
+        Profile.objects.create(user=user)
+        self.client.force_login(user)
+
+        response = self.client.post(reverse('edit_profile'), {
+            'display_username': 'NewPublicName',
+            'first_name': 'Jordan',
+            'last_name': 'Player',
+            'home_borough': '',
+            'favorite_sports': ['Basketball'],
+            'skill_level': 'beginner',
+        })
+
+        self.assertRedirects(response, reverse('home'))
+        user.refresh_from_db()
+        self.assertEqual(user.username, 'loginname')
+        self.assertEqual(user.first_name, 'Jordan')
+        self.assertEqual(user.profile.display_username, 'NewPublicName')
+
+    def test_profile_display_username_must_be_unique_case_insensitively(self):
+        User.objects.create_user('first', 'first@nyu.edu', PASSWORD)
+        Profile.objects.create(user=User.objects.get(username='first'), display_username='ParkRunner')
+        second_user = User.objects.create_user('second', 'second@nyu.edu', PASSWORD)
+        Profile.objects.create(user=second_user)
+        self.client.force_login(second_user)
+
+        response = self.client.post(reverse('edit_profile'), {
+            'display_username': 'parkrunner',
+            'first_name': '',
+            'last_name': '',
+            'home_borough': '',
+            'favorite_sports': [],
+            'skill_level': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('display_username', response.context['form'].errors)
+
+    def test_saved_custom_sports_remain_available_on_profile_edit_page(self):
+        self.post_register()
+        self.post_profile(favorite_sports=['Basketball', 'Running', 'Rock climbing'])
+
+        response = self.client.get(reverse('register_profile'))
+
+        self.assertIn('Rock climbing', response.context['form']['favorite_sports'].value())
 
     def test_profile_favorite_sports_accepts_custom_sports_without_commas(self):
         self.post_register()
@@ -147,6 +232,8 @@ class LoginTests(TestCase):
         response = self.client.get(reverse('login'))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'registration/login.html')
+        self.assertIn('<form method="post" class="auth-form" autocomplete="off">', response.content.decode())
+        self.assertContains(response, 'autocomplete="off"')
 
     def test_login_with_username(self):
         response = self.client.post(reverse('login'), {'username': 'parkfan', 'password': PASSWORD})
@@ -175,6 +262,30 @@ class LandingLinksTests(TestCase):
         response = self.client.get(reverse('home'))
         self.assertContains(response, f'href="{reverse("login")}"')
         self.assertContains(response, f'href="{reverse("register")}"')
+
+    def test_authenticated_navigation_and_account_footer_link_to_profile_edit(self):
+        user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, f'href="{reverse("edit_profile")}"')
+        self.assertContains(response, '>View profile</a>')
+        self.assertContains(response, '>Edit profile</a>')
+
+    def test_profile_saved_message_has_fifteen_second_dismissal(self):
+        self.client.force_login(User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD))
+
+        response = self.client.post(reverse('register_profile'), {
+            'first_name': 'Park',
+            'last_name': 'Fan',
+            'home_borough': 'M',
+            'favorite_sports': ['Basketball'],
+            'skill_level': 'beginner',
+        }, follow=True)
+
+        self.assertContains(response, 'Profile details saved.')
+        self.assertContains(response, 'data-auto-dismiss="15000"')
 
     def test_signup_message_shows_on_the_landing_page(self):
         response = self.client.post(reverse('register'), {

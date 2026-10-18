@@ -12,6 +12,7 @@ class ProfileSkillLevel(models.TextChoices):
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    display_username = models.CharField(max_length=150, blank=True)
     home_borough = models.CharField(max_length=1, choices=Borough.choices, blank=True)
     favorite_sports = models.JSONField(default=list, blank=True)
     skill_level = models.CharField(max_length=16, choices=ProfileSkillLevel.choices, blank=True)

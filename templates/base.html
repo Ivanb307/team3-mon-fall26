@@ -17,7 +17,7 @@
     <header class="site-header">
       <a class="brand" href="/">{% include "includes/logo.html" %}</a>
       <nav class="site-nav" aria-label="Account">
-        <a class="site-nav-link" href="{{ event_list_url|default:'/events/' }}">Browse events</a>
+        {% if event_list_url %}<a class="site-nav-link" href="{{ event_list_url }}">Browse events</a>{% endif %}
         {% if user.is_authenticated %}
           <span class="site-nav-user">{{ user.username }}</span>
           <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>

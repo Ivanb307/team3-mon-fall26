@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'accounts',
     'parks',
     'events',
+    'eventexplore'
 ]
 
 MIDDLEWARE = [

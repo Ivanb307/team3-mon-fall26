@@ -48,6 +48,11 @@ SAMPLE_EVENTS = [
      'All-levels outdoor flow. Bring your own mat.'),
     ('Pickleball Round Robin', 'Clove Lakes Park', Borough.STATEN_ISLAND, 16, '17:00', SkillLevel.BEGINNER, 12,
      'Paddles available to borrow.'),
+    # Past events: hidden by default, shown with "Include past events".
+    ('Last Weekend Pickup Soccer', 'Prospect Park', Borough.BROOKLYN, -6, '10:00', SkillLevel.ALL, 22,
+     'Already happened. Shows up only with "Include past events".'),
+    ('Earlier Reservoir Run', 'Central Park', Borough.MANHATTAN, -3, '07:30', SkillLevel.ALL, None,
+     'Already happened. Shows up only with "Include past events".'),
 ]
 
 
@@ -94,4 +99,5 @@ class Command(BaseCommand):
                 description=description,
             )
 
-        self.stdout.write(self.style.SUCCESS(f'Created {len(SAMPLE_EVENTS)} sample events.'))
+        past = sum(1 for row in SAMPLE_EVENTS if row[3] < 0)
+        self.stdout.write(self.style.SUCCESS(f'Created {len(SAMPLE_EVENTS)} sample events ({past} in the past).'))

@@ -9,7 +9,7 @@
     <p class="discover-sub">Pickup games and park meetups across the five boroughs.</p>
   </header>
 
-  <form class="discover-filters" method="get" action="{% url 'event_list' %}" role="search" aria-label="Filter events">
+  <form class="discover-filters" method="get" action="{% url 'event_list' %}" role="search" aria-label="Filter events" data-autosubmit>
     <div class="discover-field">
       <label for="filter-borough">Borough</label>
       <select id="filter-borough" name="borough">
@@ -101,4 +101,16 @@
     </div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Re-run the search as soon as a dropdown or the checkbox changes.
+  // The activity text box still uses Enter or the Apply button.
+  document.querySelectorAll('form[data-autosubmit]').forEach((form) => {
+    form.querySelectorAll('select, input[type="checkbox"]').forEach((field) => {
+      field.addEventListener('change', () => form.requestSubmit());
+    });
+  });
+</script>
 {% endblock %}

@@ -322,3 +322,23 @@ class EventDiscoveryFeedTests(TestCase):
         self.assertEqual([e['activity'] for e in data['results']], ['Brooklyn Run'])
 
         self.assertEqual(self.client.post(reverse('event_list_api')).status_code, 405)
+
+    def test_landing_page_renders_when_event_routes_are_disabled(self):
+        # Production deployment-check mode serves only the landing page (config.deployment_urls).
+        with self.settings(ROOT_URLCONF='config.deployment_urls'):
+            response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Browse events')
+        self.assertContains(response, 'href="#events"')
+
+    def test_seed_command_creates_past_events_hidden_by_default(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        call_command('seed_events', stdout=StringIO())
+
+        default = self.client.get(reverse('event_list'))
+        self.assertNotContains(default, 'Earlier Reservoir Run')
+        with_past = self.client.get(reverse('event_list'), {'include_past': '1'})
+        self.assertContains(with_past, 'Earlier Reservoir Run')
+        self.assertContains(with_past, 'Event ended')

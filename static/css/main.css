@@ -174,13 +174,18 @@ a:focus-visible {
 
 .auth-page {
   display: grid;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
   background: var(--surface);
 }
 
 .auth-visual {
   display: none;
   position: relative;
+  min-height: 0;
   overflow: hidden;
   /* Photo: RDNE Stock project on Pexels (pexels.com/photo/7551734) */
   background: var(--green-900) url("../img/auth-hero.jpg") 62% center / cover no-repeat;
@@ -246,12 +251,17 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  min-height: 0;
   padding: 40px 16px;
+  overflow-y: auto;
 }
 
 .auth-form-wrap {
   width: 100%;
+  min-width: 0;
   max-width: 420px;
+  margin: auto 0;
 }
 
 .auth-mobile-brand {
@@ -403,7 +413,7 @@ a:focus-visible {
 
 @media (min-width: 960px) {
   .auth-page {
-    grid-template-columns: 45fr 55fr;
+    grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
   }
 
   .auth-visual {
@@ -456,6 +466,13 @@ a:focus-visible {
   min-height: 112px;
   padding: 12px 14px;
   resize: vertical;
+}
+
+#id_bio {
+  height: 160px;
+  min-height: 160px;
+  overflow-y: auto;
+  resize: none !important;
 }
 
 .input-wrap input::placeholder,

@@ -3,11 +3,13 @@ from django.contrib.auth.backends import ModelBackend
 
 
 class EmailOrUsernameBackend(ModelBackend):
-    """Lets people log in with either their username or their email address."""
+    """Authenticates accounts by their unique email address."""
 
     def authenticate(self, request, username=None, password=None, **kwargs):
-        if username and '@' in username:
-            user = get_user_model().objects.filter(email__iexact=username).order_by('pk').first()
-            if user is not None:
-                username = user.get_username()
+        if not username or '@' not in username or password is None:
+            return None
+        user = get_user_model().objects.filter(email__iexact=username).first()
+        if user is None:
+            return None
+        username = user.get_username()
         return super().authenticate(request, username=username, password=password, **kwargs)

@@ -3,6 +3,7 @@ from django.contrib.auth import login
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect
 from django.views.generic import FormView
+from uuid import uuid4
 
 from .forms import ProfileSetupForm, RegisterForm
 from .models import Profile
@@ -19,10 +20,14 @@ class RegisterView(FormView):
 
     def form_valid(self, form):
         user = form.save(commit=False)
+        user.username = uuid4().hex
         try:
             with transaction.atomic():
                 user.save()
-                Profile.objects.create(user=user)
+                Profile.objects.create(
+                    user=user,
+                    display_username=form.cleaned_data['display_username'],
+                )
         except IntegrityError:
             form.add_error(None, 'That username or email is no longer available. Please choose another.')
             return self.form_invalid(form)

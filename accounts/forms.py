@@ -28,15 +28,20 @@ COMMON_SPORTS = (
 
 class RegisterForm(UserCreationForm):
     email = forms.EmailField()
+    display_username = forms.CharField(
+        max_length=150,
+        label='Username',
+        help_text='This is the name other members see.',
+    )
 
     class Meta(UserCreationForm.Meta):
         model = get_user_model()
-        fields = ('username', 'email')
+        fields = ('display_username', 'email')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         placeholders = {
-            'username': 'Pick a username',
+            'display_username': 'Pick a username',
             'email': 'you@example.com',
             'password1': 'Password',
             'password2': 'Confirm password',
@@ -45,12 +50,16 @@ class RegisterForm(UserCreationForm):
             self.fields[name].widget.attrs['placeholder'] = text
             self.fields[name].help_text = ''
             self.fields[name].widget.attrs['autocomplete'] = 'off'
-        self.fields['username'].label = 'Login username'
-        self.fields['username'].help_text = 'This login username is only used to login. Other members see your profile username.'
         self.fields['password1'].help_text = 'At least 8 characters, not too common or all numbers.'
         self.fields['password2'].label = 'Confirm password'
         self.fields['password1'].widget.attrs['autocomplete'] = 'new-password'
         self.fields['password2'].widget.attrs['autocomplete'] = 'new-password'
+
+    def clean_display_username(self):
+        display_username = self.cleaned_data['display_username'].strip()
+        if Profile.objects.filter(display_username__iexact=display_username).exists():
+            raise forms.ValidationError('That username is already in use.')
+        return display_username
 
     def clean_email(self):
         email = self.cleaned_data['email']
@@ -63,8 +72,17 @@ class ProfileSetupForm(forms.ModelForm):
     display_username = forms.CharField(
         max_length=150,
         label='Username',
+        help_text='This is the name other members see.',
+    )
+    bio = forms.CharField(
+        max_length=500,
+        label='Bio',
         required=False,
-        help_text='This is the name other members see. It does not change your login username.',
+        widget=forms.Textarea(attrs={
+            'rows': 6,
+            'style': 'resize: none !important;',
+            'placeholder': 'Share a little bit about yourself or some fun facts.',
+        }),
     )
     first_name = forms.CharField(
         max_length=150,
@@ -93,7 +111,7 @@ class ProfileSetupForm(forms.ModelForm):
 
     class Meta:
         model = Profile
-        fields = ('display_username', 'home_borough', 'favorite_sports', 'skill_level')
+        fields = ('display_username', 'bio', 'home_borough', 'favorite_sports', 'skill_level')
         labels = {
             'home_borough': 'Home borough',
             'skill_level': 'Overall skill level',
@@ -180,8 +198,10 @@ class LoginForm(AuthenticationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['username'].label = 'Email or username'
-        self.fields['username'].widget.attrs['placeholder'] = 'you@example.com'
+        self.fields['username'] = forms.CharField(
+            label='Email',
+            widget=forms.EmailInput(attrs={'placeholder': 'you@example.com'}),
+        )
         self.fields['username'].widget.attrs['autocomplete'] = 'off'
         self.fields['password'].widget.attrs['placeholder'] = 'Password'
         self.fields['password'].widget.attrs['autocomplete'] = 'current-password'

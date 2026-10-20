@@ -1,4 +1,4 @@
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
@@ -49,7 +49,7 @@ class RegisterTests(TestCase):
         self.assertRedirects(response, reverse('register_profile'))
         user = User.objects.get(email='parkfan@nyu.edu')
         self.assertEqual(user.email, 'parkfan@nyu.edu')
-        self.assertNotEqual(user.username, 'parkfan')
+        self.assertEqual(user.username, 'parkfan')
         self.assertNotEqual(user.password, PASSWORD)
         self.assertEqual(int(self.client.session['_auth_user_id']), user.pk)
         profile = Profile.objects.get(user=user)
@@ -122,7 +122,7 @@ class RegisterTests(TestCase):
         self.assertEqual(profile.skill_level, 'competitive')
         user = User.objects.get(email='parkfan@nyu.edu')
         self.assertEqual((user.first_name, user.last_name), ('Park', 'Fan'))
-        self.assertNotEqual(user.username, 'parkfan')
+        self.assertEqual(user.username, 'ParkFan42')
 
     def test_edit_profile_prefills_existing_information_without_skip_link(self):
         user = User.objects.create_user(
@@ -149,7 +149,7 @@ class RegisterTests(TestCase):
         self.assertNotContains(response, 'Skip for now')
         self.assertEqual(response.context['form'].instance, profile)
 
-    def test_editing_public_username_does_not_change_login_username(self):
+    def test_editing_public_username_updates_account_username(self):
         user = User.objects.create_user('loginname', 'login@nyu.edu', PASSWORD)
         Profile.objects.create(user=user)
         self.client.force_login(user)
@@ -166,7 +166,7 @@ class RegisterTests(TestCase):
 
         self.assertRedirects(response, reverse('home'))
         user.refresh_from_db()
-        self.assertEqual(user.username, 'loginname')
+        self.assertEqual(user.username, 'NewPublicName')
         self.assertEqual(user.first_name, 'Jordan')
         self.assertEqual(user.profile.display_username, 'NewPublicName')
         self.assertEqual(user.profile.bio, 'I like basketball.')
@@ -312,6 +312,34 @@ class LoginTests(TestCase):
         self.assertRedirects(response, reverse('home'))
         self.assertEqual(int(self.client.session['_auth_user_id']), user.pk)
 
+    def test_username_authentication_is_only_available_to_staff(self):
+        self.assertIsNone(authenticate(username=self.user.username, password=PASSWORD))
+
+        admin = User.objects.create_user(
+            'siteadmin',
+            'admin@nyu.edu',
+            PASSWORD,
+            is_staff=True,
+        )
+        self.assertEqual(authenticate(username=admin.username, password=PASSWORD), admin)
+
+    def test_admin_login_accepts_staff_username(self):
+        admin = User.objects.create_user(
+            'siteadmin',
+            'admin@nyu.edu',
+            PASSWORD,
+            is_staff=True,
+        )
+
+        response = self.client.post(reverse('admin:login'), {
+            'username': admin.username,
+            'password': PASSWORD,
+            'next': reverse('admin:index'),
+        })
+
+        self.assertRedirects(response, reverse('admin:index'))
+        self.assertEqual(int(self.client.session['_auth_user_id']), admin.pk)
+
     def test_wrong_password_and_unknown_account_show_the_same_generic_error(self):
         for username in ('parkfan@nyu.edu', 'nobody@nyu.edu'):
             response = self.client.post(reverse('login'), {'username': username, 'password': 'wrong-pass'})
@@ -341,7 +369,7 @@ class LandingLinksTests(TestCase):
         self.assertContains(response, '>View profile</a>')
         self.assertContains(response, '>Edit profile</a>')
 
-    def test_profile_saved_message_has_five_second_dismissal(self):
+    def test_profile_saved_message_has_two_second_dismissal(self):
         self.client.force_login(User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD))
 
         response = self.client.post(reverse('register_profile'), {
@@ -354,7 +382,7 @@ class LandingLinksTests(TestCase):
         }, follow=True)
 
         self.assertContains(response, 'Profile details saved.')
-        self.assertContains(response, 'data-auto-dismiss="5000"')
+        self.assertContains(response, 'data-auto-dismiss="2000"')
 
     def test_signup_message_shows_on_the_landing_page(self):
         response = self.client.post(reverse('register'), {

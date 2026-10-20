@@ -1,7 +1,7 @@
 {% if messages %}
   <div class="messages">
     {% for message in messages %}
-      <div class="alert alert--{{ message.tags|default:'info' }}" role="status"{% if message.message == 'Profile details saved.' %} data-auto-dismiss="5000"{% endif %}>{{ message }}</div>
+      <div class="alert alert--{{ message.tags|default:'info' }}" role="status"{% if message.message == 'Profile details saved.' %} data-auto-dismiss="2000"{% endif %}>{{ message }}</div>
     {% endfor %}
   </div>
 {% endif %}

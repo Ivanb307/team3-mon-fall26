@@ -57,7 +57,10 @@ class RegisterForm(UserCreationForm):
 
     def clean_display_username(self):
         display_username = self.cleaned_data['display_username'].strip()
-        if Profile.objects.filter(display_username__iexact=display_username).exists():
+        if (
+            Profile.objects.filter(display_username__iexact=display_username).exists()
+            or get_user_model().objects.filter(username__iexact=display_username).exists()
+        ):
             raise forms.ValidationError('That username is already in use.')
         return display_username
 
@@ -120,10 +123,11 @@ class ProfileSetupForm(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         if user is not None:
-            self.fields['display_username'].widget.attrs['placeholder'] = user.username
+            current_username = self.instance.display_username or user.username
+            self.fields['display_username'].widget.attrs['placeholder'] = current_username
             if not self.is_bound:
                 if not self.initial.get('display_username'):
-                    self.initial['display_username'] = user.username
+                    self.initial['display_username'] = current_username
                 self.initial.setdefault('first_name', user.first_name)
                 self.initial.setdefault('last_name', user.last_name)
         for field in self.fields.values():
@@ -153,10 +157,15 @@ class ProfileSetupForm(forms.ModelForm):
 
     def clean_display_username(self):
         display_username = self.cleaned_data['display_username'].strip()
-        if display_username and Profile.objects.filter(
-            display_username__iexact=display_username
-        ).exclude(pk=self.instance.pk).exists():
-            raise forms.ValidationError('That profile username is already in use.')
+        if display_username:
+            profile_taken = Profile.objects.filter(
+                display_username__iexact=display_username
+            ).exclude(pk=self.instance.pk).exists()
+            user_taken = get_user_model().objects.filter(
+                username__iexact=display_username
+            ).exclude(pk=self.instance.user_id).exists()
+            if profile_taken or user_taken:
+                raise forms.ValidationError('That username is already in use.')
         return display_username
 
     def clean_favorite_sports(self):

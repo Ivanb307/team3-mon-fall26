@@ -1,12 +1,31 @@
+import shutil
+import tempfile
+from io import BytesIO
+from unittest import mock
+
 from django.contrib.auth import authenticate, get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from .models import Profile
 
 User = get_user_model()
 PASSWORD = 'Hudson-River-Run-77'
+TEST_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+def make_photo(size=(800, 600), image_format='PNG', exif=None):
+    buffer = BytesIO()
+    image = Image.new('RGB', size, 'green')
+    if exif is not None:
+        image.save(buffer, format=image_format, exif=exif)
+    else:
+        image.save(buffer, format=image_format)
+    extension = image_format.lower()
+    return SimpleUploadedFile(f'my-photo.{extension}', buffer.getvalue(), content_type=f'image/{extension}')
 
 
 class RegisterTests(TestCase):
@@ -72,7 +91,10 @@ class RegisterTests(TestCase):
         self.assertContains(response, 'Skip for now')
         self.assertContains(response, 'placeholder="John"')
         self.assertContains(response, 'placeholder="Doe"')
-        self.assertIn('<form method="post" class="auth-form" autocomplete="off">', response.content.decode())
+        self.assertIn(
+            '<form method="post" class="auth-form" autocomplete="off" enctype="multipart/form-data">',
+            response.content.decode(),
+        )
         self.assertContains(response, 'autocomplete="off"')
         self.assertNotContains(response, 'Search sports')
         self.assertContains(response, '<details class="profile-sport-dropdown"', html=False)
@@ -384,9 +406,116 @@ class LandingLinksTests(TestCase):
         self.assertContains(response, 'Profile details saved.')
         self.assertContains(response, 'data-auto-dismiss="2000"')
 
-    def test_signup_message_shows_on_the_landing_page(self):
+    def test_signup_goes_to_profile_setup_without_a_banner(self):
         response = self.client.post(reverse('register'), {
             'display_username': 'parkfan', 'email': 'parkfan@nyu.edu',
             'password1': PASSWORD, 'password2': PASSWORD,
         }, follow=True)
-        self.assertContains(response, 'Account created. Welcome to NYC Active!')
+        self.assertContains(response, 'Complete your profile')
+        self.assertNotContains(response, 'class="alert')
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class ProfilePhotoTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='parkfan', email='parkfan@nyu.edu', password=PASSWORD)
+        self.client.force_login(self.user)
+
+    def post_profile(self, **overrides):
+        return self.client.post(reverse('edit_profile'), {'display_username': 'parkfan', **overrides})
+
+    def saved_avatar(self):
+        return Profile.objects.get(user=self.user).avatar
+
+    def test_setup_page_shows_photo_picker(self):
+        response = self.client.get(reverse('register_profile'))
+        self.assertContains(response, 'enctype="multipart/form-data"')
+        self.assertContains(response, 'Upload photo')
+        self.assertContains(response, 'title="Remove photo" hidden>')
+
+    def test_uploaded_photo_is_saved_as_a_square_jpeg_with_a_random_name(self):
+        response = self.post_profile(avatar=make_photo((800, 600)))
+
+        self.assertRedirects(response, reverse('home'))
+        avatar = self.saved_avatar()
+        self.assertTrue(avatar.name.startswith('avatars/'))
+        self.assertNotIn('my-photo', avatar.name)
+        with Image.open(avatar) as image:
+            self.assertEqual(image.format, 'JPEG')
+            self.assertEqual(image.size, (512, 512))
+
+    def test_photo_metadata_is_removed(self):
+        exif = Image.Exif()
+        exif[0x010F] = 'Phone maker'
+        self.post_profile(avatar=make_photo(image_format='JPEG', exif=exif))
+
+        with Image.open(self.saved_avatar()) as image:
+            self.assertEqual(dict(image.getexif()), {})
+
+    def test_non_image_upload_is_rejected_and_profile_is_unchanged(self):
+        notes = SimpleUploadedFile('notes.png', b'not really an image', content_type='image/png')
+        response = self.post_profile(avatar=notes)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Upload a valid image.')
+        self.assertFalse(self.saved_avatar())
+
+    def test_photo_over_size_limit_is_rejected(self):
+        with mock.patch('accounts.forms.AVATAR_MAX_BYTES', 100):
+            response = self.post_profile(avatar=make_photo())
+
+        self.assertContains(response, 'Choose a photo under 5 MB.')
+        self.assertFalse(self.saved_avatar())
+
+    def test_edit_page_shows_change_and_the_remove_x_once_a_photo_exists(self):
+        self.post_profile(avatar=make_photo())
+        response = self.client.get(reverse('edit_profile'))
+
+        self.assertContains(response, 'Change photo')
+        self.assertContains(response, 'title="Remove photo">')
+        self.assertContains(response, self.saved_avatar().url)
+
+    def test_photo_can_be_removed_and_its_file_is_deleted(self):
+        self.post_profile(avatar=make_photo())
+        avatar = self.saved_avatar()
+        old_name, storage = avatar.name, avatar.storage
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.post_profile(remove_avatar='True')
+
+        self.assertFalse(self.saved_avatar())
+        self.assertFalse(storage.exists(old_name))
+
+    def test_replacing_a_photo_deletes_the_old_file(self):
+        self.post_profile(avatar=make_photo())
+        avatar = self.saved_avatar()
+        old_name, storage = avatar.name, avatar.storage
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.post_profile(avatar=make_photo((300, 900)))
+
+        new_name = self.saved_avatar().name
+        self.assertNotEqual(new_name, old_name)
+        self.assertTrue(storage.exists(new_name))
+        self.assertFalse(storage.exists(old_name))
+
+    def test_saving_other_fields_keeps_the_existing_photo(self):
+        self.post_profile(avatar=make_photo())
+        old_name = self.saved_avatar().name
+
+        self.post_profile(bio='Weekend hooper.')
+
+        self.assertEqual(self.saved_avatar().name, old_name)
+
+    def test_unclicked_remove_flag_keeps_the_photo(self):
+        self.post_profile(avatar=make_photo())
+        old_name = self.saved_avatar().name
+
+        self.post_profile(remove_avatar='False')
+
+        self.assertEqual(self.saved_avatar().name, old_name)

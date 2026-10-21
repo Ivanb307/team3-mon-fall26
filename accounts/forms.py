@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.validators import UnicodeUsernameValidator
 
 from parks.models import Borough
 
@@ -57,6 +58,8 @@ class RegisterForm(UserCreationForm):
 
     def clean_display_username(self):
         display_username = self.cleaned_data['display_username'].strip()
+        self.instance.username = display_username
+        UnicodeUsernameValidator()(display_username)
         if (
             Profile.objects.filter(display_username__iexact=display_username).exists()
             or get_user_model().objects.filter(username__iexact=display_username).exists()
@@ -157,6 +160,7 @@ class ProfileSetupForm(forms.ModelForm):
 
     def clean_display_username(self):
         display_username = self.cleaned_data['display_username'].strip()
+        UnicodeUsernameValidator()(display_username)
         if display_username:
             profile_taken = Profile.objects.filter(
                 display_username__iexact=display_username

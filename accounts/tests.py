@@ -472,6 +472,20 @@ class ProfilePhotoTests(TestCase):
         self.assertContains(response, 'Choose a photo under 5 MB.')
         self.assertFalse(self.saved_avatar())
 
+    def test_truncated_jpeg_shows_an_error_and_leaves_the_profile_unchanged(self):
+        self.post_profile(avatar=make_photo(), bio='Original bio.')
+        old_name = self.saved_avatar().name
+        whole = make_photo(image_format='JPEG').read()
+        truncated = SimpleUploadedFile('photo.jpg', whole[:-2], content_type='image/jpeg')
+
+        response = self.post_profile(avatar=truncated, bio='New bio.')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Upload a valid image.')
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.avatar.name, old_name)
+        self.assertEqual(profile.bio, 'Original bio.')
+
     def test_edit_page_shows_change_and_the_remove_x_once_a_photo_exists(self):
         self.post_profile(avatar=make_photo())
         response = self.client.get(reverse('edit_profile'))

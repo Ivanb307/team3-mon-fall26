@@ -186,7 +186,7 @@ class RegisterTests(TestCase):
             'skill_level': 'beginner',
         })
 
-        self.assertRedirects(response, reverse('home'))
+        self.assertRedirects(response, reverse('public_profile', args=['NewPublicName']))
         user.refresh_from_db()
         self.assertEqual(user.username, 'NewPublicName')
         self.assertEqual(user.first_name, 'Jordan')
@@ -381,15 +381,15 @@ class LandingLinksTests(TestCase):
         self.assertContains(response, f'href="{reverse("login")}"')
         self.assertContains(response, f'href="{reverse("register")}"')
 
-    def test_authenticated_navigation_and_account_footer_link_to_profile_edit(self):
+    def test_view_profile_opens_public_profile_and_footer_links_to_edit(self):
         user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
         self.client.force_login(user)
 
         response = self.client.get(reverse('home'))
 
-        self.assertContains(response, f'href="{reverse("edit_profile")}"')
-        self.assertContains(response, '>View profile</a>')
-        self.assertContains(response, '>Edit profile</a>')
+        profile_url = reverse('public_profile', args=['parkfan'])
+        self.assertContains(response, f'href="{profile_url}">View profile</a>')
+        self.assertContains(response, f'href="{reverse("edit_profile")}">Edit profile</a>')
 
     def test_profile_saved_message_has_two_second_dismissal(self):
         self.client.force_login(User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD))
@@ -441,7 +441,7 @@ class ProfilePhotoTests(TestCase):
     def test_uploaded_photo_is_saved_as_a_square_jpeg_with_a_random_name(self):
         response = self.post_profile(avatar=make_photo((800, 600)))
 
-        self.assertRedirects(response, reverse('home'))
+        self.assertRedirects(response, reverse('public_profile', args=['parkfan']))
         avatar = self.saved_avatar()
         self.assertTrue(avatar.name.startswith('avatars/'))
         self.assertNotIn('my-photo', avatar.name)
@@ -519,3 +519,146 @@ class ProfilePhotoTests(TestCase):
         self.post_profile(remove_avatar='False')
 
         self.assertEqual(self.saved_avatar().name, old_name)
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class PublicProfileTests(TestCase):
+    def setUp(self):
+        self.member = User.objects.create_user('hooper', 'hooper@nyu.edu', PASSWORD)
+        self.profile = Profile.objects.create(
+            user=self.member,
+            display_username='hooper',
+            bio='Weekend hooper.\nUsually at McCarren.',
+            home_borough='B',
+            favorite_sports=['Basketball', 'Running'],
+            skill_level='intermediate',
+        )
+        self.url = reverse('public_profile', args=['hooper'])
+
+    def test_complete_profile_shows_every_public_field(self):
+        response = self.client.get(self.url)
+
+        self.assertContains(response, '<h1 class="event-card-title">hooper</h1>', html=True)
+        self.assertContains(response, 'Weekend hooper.<br>Usually at McCarren.')
+        self.assertContains(response, 'Brooklyn')
+        self.assertContains(response, 'Intermediate')
+        self.assertContains(response, '<li class="event-badge">Basketball</li>', html=True)
+        self.assertContains(response, '<li class="event-badge">Running</li>', html=True)
+        self.assertContains(response, 'Member since')
+        self.assertNotContains(response, 'No bio yet')
+
+    def test_real_name_and_email_stay_private(self):
+        self.member.first_name, self.member.last_name = 'Jordan', 'Player'
+        self.member.save()
+
+        response = self.client.get(self.url)
+
+        self.assertNotContains(response, 'Jordan')
+        self.assertNotContains(response, 'Player')
+        self.assertNotContains(response, 'hooper@nyu.edu')
+
+    def test_empty_optional_fields_show_fallbacks(self):
+        Profile.objects.filter(pk=self.profile.pk).update(
+            bio='', home_borough='', favorite_sports=[], skill_level='',
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertContains(response, 'No bio yet')
+        self.assertContains(response, 'No sports added yet')
+        self.assertContains(response, 'Not set', count=2)
+        self.assertContains(response, 'profile-photo-placeholder')
+
+    def test_member_without_a_profile_row_gets_fallbacks_and_no_new_row(self):
+        User.objects.create_user('newcomer', 'newcomer@nyu.edu', PASSWORD)
+
+        response = self.client.get(reverse('public_profile', args=['newcomer']))
+
+        self.assertContains(response, 'newcomer')
+        self.assertContains(response, 'No bio yet')
+        self.assertFalse(Profile.objects.filter(user__username='newcomer').exists())
+
+    def test_uploaded_photo_is_shown(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('edit_profile'), {'display_username': 'hooper', 'avatar': make_photo()})
+        self.client.logout()
+
+        response = self.client.get(self.url)
+
+        self.profile.refresh_from_db()
+        self.assertContains(response, f'src="{self.profile.avatar.url}"')
+        self.assertNotContains(response, 'profile-photo-placeholder')
+
+    def test_bio_html_is_escaped(self):
+        Profile.objects.filter(pk=self.profile.pk).update(bio='<script>alert(1)</script>')
+
+        response = self.client.get(self.url)
+
+        self.assertNotContains(response, '<script>alert(1)</script>')
+        self.assertContains(response, '&lt;script&gt;')
+
+    def test_username_lookup_ignores_case(self):
+        response = self.client.get(reverse('public_profile', args=['HOOPER']))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['member'], self.member)
+
+    def test_unknown_username_returns_404(self):
+        response = self.client.get(reverse('public_profile', args=['ghost']))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_suspended_member_returns_404(self):
+        self.member.is_active = False
+        self.member.save()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_logged_out_visitors_can_view_but_not_edit(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '>Edit profile</a>')
+
+    def test_other_members_see_no_edit_button(self):
+        viewer = User.objects.create_user('viewer', 'viewer@nyu.edu', PASSWORD)
+        self.client.force_login(viewer)
+
+        response = self.client.get(self.url)
+
+        self.assertNotContains(response, '>Edit profile</a>')
+
+    def test_own_profile_has_edit_button(self):
+        self.client.force_login(self.member)
+
+        response = self.client.get(self.url)
+
+        self.assertContains(response, f'href="{reverse("edit_profile")}">Edit profile</a>')
+
+    def test_navbar_view_profile_links_to_own_public_profile(self):
+        self.client.force_login(self.member)
+
+        response = self.client.get(self.url)
+
+        self.assertContains(response, f'href="{self.url}">View profile</a>')
+
+    def test_saving_profile_edits_returns_to_public_profile(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(reverse('edit_profile'), {
+            'display_username': 'hooper',
+            'bio': 'Now playing pickleball too.',
+        }, follow=True)
+
+        self.assertRedirects(response, self.url)
+        self.assertContains(response, 'Now playing pickleball too.')
+        self.assertContains(response, 'Profile details saved.')
+
+    def test_first_time_setup_still_goes_home(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(reverse('register_profile'), {'display_username': 'hooper'})
+
+        self.assertRedirects(response, reverse('home'))

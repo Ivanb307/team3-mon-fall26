@@ -44,6 +44,21 @@ class EventCreationAndCapacityTests(TestCase):
         data.update(overrides)
         return data
 
+    def test_event_page_links_organizer_to_their_public_profile(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            park=self.park,
+            activity='Pickup Basketball',
+            date=timezone.localdate() + datetime.timedelta(days=7),
+            time=datetime.time(18, 30),
+            description='Half-court 5v5 run.',
+        )
+
+        response = self.client.get(reverse('event_detail', kwargs={'pk': event.pk}))
+
+        profile_url = reverse('public_profile', args=['organizer'])
+        self.assertContains(response, f'href="{profile_url}"><strong>organizer</strong></a>')
+
     def test_unauthenticated_user_is_redirected_to_login(self):
         url = reverse('event_create')
         get_response = self.client.get(url)

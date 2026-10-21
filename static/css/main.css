@@ -69,18 +69,27 @@ a {
 
 .site-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
   padding: 14px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
+/* Wraps onto a second row on phones instead of running off-screen. */
 .site-nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+@media (max-width: 639px) {
+  .site-header {
+    padding: 12px 16px;
+  }
 }
 
 .site-nav form {
@@ -840,4 +849,60 @@ a:focus-visible {
 .event-description p {
   margin: 0;
   color: var(--ink-2);
+}
+
+/* Public profile (#13). The card, details grid, sections and sport pills
+   reuse the event card styles above so both pages look alike. */
+.profile-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.profile-card-header .profile-photo-preview {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+}
+
+.profile-card-heading {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+/* Phones: stack the photo, name and button in a centered column. */
+@media (max-width: 639px) {
+  .profile-card-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .profile-card-heading {
+    flex: none;
+  }
+}
+
+.profile-card-heading .event-card-title {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.profile-section + .profile-section {
+  margin-top: 24px;
+}
+
+.profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-description .profile-empty,
+.profile-empty {
+  color: var(--muted);
 }

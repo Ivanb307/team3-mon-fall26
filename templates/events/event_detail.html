@@ -11,7 +11,7 @@
     </div>
     <h1 class="event-card-title">{{ event.activity }}</h1>
     <p class="event-card-subtitle">
-      Hosted by <a href="{% url 'public_profile' username=event.organizer.username %}"><strong>{{ event.organizer.profile.display_username|default:event.organizer.username }}</strong></a>
+      Hosted by <a href="{% url 'public_profile' username=event.organizer.username %}"><strong>@{{ event.organizer.profile.display_username|default:event.organizer.username }}</strong></a>
     </p>
   </header>
 

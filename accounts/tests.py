@@ -83,7 +83,9 @@ class RegisterTests(TestCase):
         response = self.client.get(reverse('register_profile'))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'registration/profile_setup.html')
-        self.assertContains(response, '<h1 class="auth-title">Complete your profile</h1>', html=True)
+        self.assertContains(response, '<h1 class="profile-settings-title">Complete your profile</h1>', html=True)
+        self.assertNotContains(response, 'auth-visual')
+        self.assertNotContains(response, ' disabled>')
         self.assertContains(response, 'name="display_username"')
         self.assertContains(response, 'value="parkfan"')
         self.assertContains(response, 'name="bio"')
@@ -162,7 +164,7 @@ class RegisterTests(TestCase):
 
         response = self.client.get(reverse('edit_profile'))
 
-        self.assertContains(response, '<h1 class="auth-title">Edit your profile</h1>', html=True)
+        self.assertContains(response, '<h1 class="profile-settings-title">Profile settings</h1>', html=True)
         self.assertContains(response, 'value="TrackStar"')
         self.assertContains(response, 'value="Taylor"')
         self.assertContains(response, 'value="Runner"')
@@ -186,7 +188,7 @@ class RegisterTests(TestCase):
             'skill_level': 'beginner',
         })
 
-        self.assertRedirects(response, reverse('public_profile', args=['NewPublicName']))
+        self.assertRedirects(response, reverse('edit_profile'))
         user.refresh_from_db()
         self.assertEqual(user.username, 'NewPublicName')
         self.assertEqual(user.first_name, 'Jordan')
@@ -381,15 +383,40 @@ class LandingLinksTests(TestCase):
         self.assertContains(response, f'href="{reverse("login")}"')
         self.assertContains(response, f'href="{reverse("register")}"')
 
-    def test_view_profile_opens_public_profile_and_footer_links_to_edit(self):
+    def test_signed_in_home_is_a_placeholder_with_create_event_and_account_menu(self):
         user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
         self.client.force_login(user)
 
         response = self.client.get(reverse('home'))
 
+        self.assertTemplateUsed(response, 'home.html')
+        self.assertTemplateNotUsed(response, 'landing.html')
+        self.assertContains(response, 'More features coming soon')
+        self.assertContains(response, f'class="btn btn--primary" href="{reverse("event_create")}">Create event</a>')
         profile_url = reverse('public_profile', args=['parkfan'])
         self.assertContains(response, f'href="{profile_url}">View profile</a>')
-        self.assertContains(response, f'href="{reverse("edit_profile")}">Edit profile</a>')
+        self.assertContains(response, f'href="{reverse("edit_profile")}">Profile settings</a>')
+        self.assertContains(response, '>Log out</button>')
+
+    def test_account_menu_shows_name_role_and_photo_placeholder(self):
+        user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
+        Profile.objects.create(user=user, display_username='parkfan')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, 'aria-label="parkfan account menu"')
+        self.assertContains(response, '<span class="account-menu-name">parkfan</span>', html=True)
+        self.assertContains(response, '<span class="account-menu-role">Member</span>', html=True)
+        self.assertContains(response, 'class="profile-photo-placeholder"')
+
+    def test_account_menu_labels_staff_as_admin(self):
+        admin = User.objects.create_user('ranger', 'ranger@nyu.edu', PASSWORD, is_staff=True)
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, '<span class="account-menu-role">Admin</span>', html=True)
 
     def test_profile_saved_message_has_two_second_dismissal(self):
         self.client.force_login(User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD))
@@ -441,7 +468,7 @@ class ProfilePhotoTests(TestCase):
     def test_uploaded_photo_is_saved_as_a_square_jpeg_with_a_random_name(self):
         response = self.post_profile(avatar=make_photo((800, 600)))
 
-        self.assertRedirects(response, reverse('public_profile', args=['parkfan']))
+        self.assertRedirects(response, reverse('edit_profile'))
         avatar = self.saved_avatar()
         self.assertTrue(avatar.name.startswith('avatars/'))
         self.assertNotIn('my-photo', avatar.name)
@@ -538,7 +565,8 @@ class PublicProfileTests(TestCase):
     def test_complete_profile_shows_every_public_field(self):
         response = self.client.get(self.url)
 
-        self.assertContains(response, '<h1 class="event-card-title">hooper</h1>', html=True)
+        self.assertContains(response, '<h1 class="profile-settings-title">@hooper</h1>', html=True)
+        self.assertContains(response, '<title>@hooper · NYC Active</title>', html=True)
         self.assertContains(response, 'Weekend hooper.<br>Usually at McCarren.')
         self.assertContains(response, 'Brooklyn')
         self.assertContains(response, 'Intermediate')
@@ -616,6 +644,9 @@ class PublicProfileTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def edit_button(self):
+        return f'<a class="btn btn--ghost" href="{reverse("edit_profile")}?edit=1">Edit profile</a>'
+
     def test_logged_out_visitors_can_view_but_not_edit(self):
         response = self.client.get(self.url)
 
@@ -628,14 +659,24 @@ class PublicProfileTests(TestCase):
 
         response = self.client.get(self.url)
 
-        self.assertNotContains(response, '>Edit profile</a>')
+        self.assertNotContains(response, self.edit_button(), html=True)
 
     def test_own_profile_has_edit_button(self):
         self.client.force_login(self.member)
 
         response = self.client.get(self.url)
 
-        self.assertContains(response, f'href="{reverse("edit_profile")}">Edit profile</a>')
+        self.assertContains(response, self.edit_button(), html=True)
+
+    def test_account_menu_shows_own_photo(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('edit_profile'), {'display_username': 'hooper', 'avatar': make_photo()})
+        self.profile.refresh_from_db()
+
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, f'<img src="{self.profile.avatar.url}" alt="">', count=1)
+        self.assertNotContains(response, 'class="profile-photo-placeholder"')
 
     def test_navbar_view_profile_links_to_own_public_profile(self):
         self.client.force_login(self.member)
@@ -644,7 +685,7 @@ class PublicProfileTests(TestCase):
 
         self.assertContains(response, f'href="{self.url}">View profile</a>')
 
-    def test_saving_profile_edits_returns_to_public_profile(self):
+    def test_saved_edits_show_on_the_public_profile(self):
         self.client.force_login(self.member)
 
         response = self.client.post(reverse('edit_profile'), {
@@ -652,9 +693,9 @@ class PublicProfileTests(TestCase):
             'bio': 'Now playing pickleball too.',
         }, follow=True)
 
-        self.assertRedirects(response, self.url)
-        self.assertContains(response, 'Now playing pickleball too.')
+        self.assertRedirects(response, reverse('edit_profile'))
         self.assertContains(response, 'Profile details saved.')
+        self.assertContains(self.client.get(self.url), 'Now playing pickleball too.')
 
     def test_first_time_setup_still_goes_home(self):
         self.client.force_login(self.member)
@@ -662,3 +703,49 @@ class PublicProfileTests(TestCase):
         response = self.client.post(reverse('register_profile'), {'display_username': 'hooper'})
 
         self.assertRedirects(response, reverse('home'))
+
+
+class ProfileSettingsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
+        Profile.objects.create(user=self.user, display_username='parkfan', bio='Hoops on weekends.')
+        self.client.force_login(self.user)
+        self.url = reverse('edit_profile')
+
+    def test_settings_open_read_only_with_an_edit_button(self):
+        response = self.client.get(self.url)
+
+        self.assertFalse(response.context['editing'])
+        self.assertContains(response, 'id="profile-fieldset" disabled>')
+        self.assertContains(response, f'href="{self.url}?edit=1">Edit</a>')
+        self.assertContains(response, 'id="profile-settings-actions" hidden>')
+        self.assertContains(response, 'Hoops on weekends.')
+
+    def test_edit_param_unlocks_the_fields(self):
+        response = self.client.get(f'{self.url}?edit=1')
+
+        self.assertTrue(response.context['editing'])
+        self.assertContains(response, 'id="profile-fieldset">')
+        self.assertContains(response, f'href="{self.url}?edit=1" hidden>Edit</a>')
+        self.assertContains(response, '>Save changes</button>')
+        self.assertContains(response, f'<a class="btn btn--ghost" href="{self.url}">Cancel</a>', html=True)
+
+    def test_form_with_errors_stays_editable(self):
+        response = self.client.post(self.url, {'display_username': ''})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['editing'])
+        self.assertContains(response, 'id="profile-fieldset">')
+
+    def test_first_time_setup_is_editable_without_an_edit_button(self):
+        response = self.client.get(reverse('register_profile'))
+
+        self.assertTrue(response.context['editing'])
+        self.assertNotContains(response, 'id="profile-edit-button"')
+        self.assertContains(response, '>Save profile details</button>')
+        self.assertContains(response, '>Skip for now</a>')
+
+    def test_settings_explain_which_fields_are_public(self):
+        response = self.client.get(self.url)
+
+        self.assertContains(response, 'Your first and last name stay private.')

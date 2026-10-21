@@ -7,6 +7,9 @@ from django.views.decorators.http import require_safe
 
 @require_safe
 def home(request):
+    # Members get their (for now, placeholder) home page; visitors see the marketing page.
+    if request.user.is_authenticated:
+        return render(request, "home.html")
     return render(request, "landing.html")
 
 

@@ -53,7 +53,11 @@ class ProfileSetupView(FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['is_edit'] = self.request.resolver_match.url_name == 'edit_profile'
+        is_edit = self.request.resolver_match.url_name == 'edit_profile'
+        context['is_edit'] = is_edit
+        # Profile settings open read-only; ?edit=1 or a form with errors unlocks the fields.
+        # First-time setup is always editable.
+        context['editing'] = not is_edit or 'edit' in self.request.GET or context['form'].is_bound
         return context
 
     def form_valid(self, form):
@@ -69,10 +73,9 @@ class ProfileSetupView(FormView):
             form.add_error('display_username', 'That username is no longer available. Please choose another username.')
             return self.form_invalid(form)
         messages.success(self.request, 'Profile details saved.')
-        # Editing returns to the public profile so the changes are visible (#14);
-        # first-time setup carries on to the home page (#69).
+        # Saving settings returns them to read-only; first-time setup carries on home (#69).
         if self.request.resolver_match.url_name == 'edit_profile':
-            return redirect('public_profile', username=user.username)
+            return redirect('edit_profile')
         return redirect('home')
 
 

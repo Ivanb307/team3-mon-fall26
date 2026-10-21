@@ -57,7 +57,7 @@ class EventCreationAndCapacityTests(TestCase):
         response = self.client.get(reverse('event_detail', kwargs={'pk': event.pk}))
 
         profile_url = reverse('public_profile', args=['organizer'])
-        self.assertContains(response, f'href="{profile_url}"><strong>organizer</strong></a>')
+        self.assertContains(response, f'href="{profile_url}"><strong>@organizer</strong></a>')
 
     def test_unauthenticated_user_is_redirected_to_login(self):
         url = reverse('event_create')

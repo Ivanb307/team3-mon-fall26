@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Home · NYC Active{% endblock %}
+{% block body_class %}page--plain{% endblock %}
+
+{% block content %}
+<section class="home-placeholder">
+  <h1>More features coming soon</h1>
+  <p>Park search, game listings and more are on the way. In the meantime, start a game.</p>
+  <a class="btn btn--primary" href="{% url 'event_create' %}">Create event</a>
+</section>
+{% endblock %}

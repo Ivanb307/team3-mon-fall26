@@ -209,7 +209,12 @@ class ProfileSetupForm(forms.ModelForm):
             return avatar
         if avatar.size > AVATAR_MAX_BYTES:
             raise forms.ValidationError('Choose a photo under 5 MB.')
-        return square_avatar(avatar)
+        try:
+            return square_avatar(avatar)
+        except (OSError, SyntaxError, ValueError, EOFError, Image.DecompressionBombError):
+            # ImageField only checks the file header, so damaged files such as a
+            # truncated JPEG get this far and fail once the pixels are decoded.
+            raise forms.ValidationError(self.fields['avatar'].error_messages['invalid_image'])
 
     def clean_favorite_sports(self):
         return self.normalize_sports(self.cleaned_data['favorite_sports'])

@@ -174,13 +174,18 @@ a:focus-visible {
 
 .auth-page {
   display: grid;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
   background: var(--surface);
 }
 
 .auth-visual {
   display: none;
   position: relative;
+  min-height: 0;
   overflow: hidden;
   /* Photo: RDNE Stock project on Pexels (pexels.com/photo/7551734) */
   background: var(--green-900) url("../img/auth-hero.jpg") 62% center / cover no-repeat;
@@ -246,12 +251,17 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  min-height: 0;
   padding: 40px 16px;
+  overflow-y: auto;
 }
 
 .auth-form-wrap {
   width: 100%;
+  min-width: 0;
   max-width: 420px;
+  margin: auto 0;
 }
 
 .auth-mobile-brand {
@@ -287,6 +297,104 @@ a:focus-visible {
   margin-top: 8px;
 }
 
+.profile-setup-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.profile-sports-picker {
+  position: relative;
+}
+
+.profile-sport-dropdown {
+  position: relative;
+}
+
+.profile-sport-dropdown > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  cursor: pointer;
+  list-style: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-sport-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.profile-sport-dropdown > summary::after {
+  content: "▾";
+  color: var(--muted);
+}
+
+.profile-sport-dropdown[open] > summary {
+  border-color: var(--green-600);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.profile-sport-panel {
+  position: absolute;
+  z-index: 2;
+  top: 100%;
+  right: 0;
+  left: 0;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--green-600);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: 0 8px 16px rgba(16, 24, 40, 0.12);
+}
+
+.profile-sport-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.profile-sport-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.profile-sport-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green-700);
+}
+
+.profile-sport-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
 .auth-switch {
   margin: 28px 0 0;
   text-align: center;
@@ -305,7 +413,7 @@ a:focus-visible {
 
 @media (min-width: 960px) {
   .auth-page {
-    grid-template-columns: 45fr 55fr;
+    grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
   }
 
   .auth-visual {
@@ -358,6 +466,13 @@ a:focus-visible {
   min-height: 112px;
   padding: 12px 14px;
   resize: vertical;
+}
+
+#id_bio {
+  height: 160px;
+  min-height: 160px;
+  overflow-y: auto;
+  resize: none !important;
 }
 
 .input-wrap input::placeholder,

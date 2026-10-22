@@ -57,12 +57,12 @@ class EventCreationAndCapacityTests(TestCase):
         anon_response = self.client.get(reverse('home'))
         self.assertNotContains(anon_response, f'href="{reverse("event_create")}"')
 
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         auth_response = self.client.get(reverse('home'))
         self.assertContains(auth_response, f'href="{reverse("event_create")}"')
 
     def test_create_event_page_renders_active_parks_in_dropdown(self):
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         response = self.client.get(reverse('event_create'))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'events/event_form.html')
@@ -70,7 +70,7 @@ class EventCreationAndCapacityTests(TestCase):
         self.assertNotContains(response, 'Retired Playground')
 
     def test_successful_event_creation_assigns_owner_and_redirects_to_event_page(self):
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         response = self.client.post(reverse('event_create'), self.valid_payload(), follow=True)
 
         self.assertEqual(Event.objects.count(), 1)
@@ -89,7 +89,7 @@ class EventCreationAndCapacityTests(TestCase):
         self.assertContains(response, '10 participants')
 
     def test_missing_required_fields_rejected_without_creating_partial_record(self):
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         for missing_field in ('park', 'activity', 'date', 'time', 'description'):
             with self.subTest(missing_field=missing_field):
                 response = self.client.post(
@@ -101,7 +101,7 @@ class EventCreationAndCapacityTests(TestCase):
                 self.assertEqual(Event.objects.count(), 0)
 
     def test_past_date_is_rejected_without_creating_event(self):
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         past_date = (timezone.localdate() - datetime.timedelta(days=1)).isoformat()
         response = self.client.post(reverse('event_create'), self.valid_payload(date=past_date))
         self.assertEqual(response.status_code, 200)
@@ -109,7 +109,7 @@ class EventCreationAndCapacityTests(TestCase):
         self.assertEqual(Event.objects.count(), 0)
 
     def test_blank_capacity_saves_as_unlimited_and_displays_on_event_page(self):
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         response = self.client.post(reverse('event_create'), self.valid_payload(capacity=''), follow=True)
         self.assertEqual(Event.objects.count(), 1)
         event = Event.objects.first()
@@ -117,7 +117,7 @@ class EventCreationAndCapacityTests(TestCase):
         self.assertContains(response, 'Unlimited')
 
     def test_zero_and_negative_capacity_rejected_with_exact_error_message(self):
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         for invalid_capacity in ('0', '-1', '-10', 'abc'):
             with self.subTest(capacity=invalid_capacity):
                 response = self.client.post(
@@ -133,7 +133,7 @@ class EventCreationAndCapacityTests(TestCase):
                 self.assertEqual(Event.objects.count(), 0)
 
     def test_whitespace_only_text_fields_and_overflow_capacity_rejected(self):
-        self.client.login(username='organizer', password=PASSWORD)
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
         response = self.client.post(
             reverse('event_create'),
             self.valid_payload(activity='   ', description='   ', capacity='99999999'),
@@ -230,7 +230,7 @@ class EventDiscoveryFeedTests(TestCase):
         self.assertContains(with_past, 'Event ended')
 
     def test_feed_shows_events_created_through_the_create_form(self):
-        self.client.login(username='host', password=PASSWORD)
+        self.client.login(username='host@nyu.edu', password=PASSWORD)
         self.client.post(reverse('event_create'), {
             'park': self.brooklyn_park.pk,
             'activity': 'Frisbee in the Park',

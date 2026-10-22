@@ -1,0 +1,54 @@
+{% extends "registration/auth_base.html" %}
+{% load static %}
+
+{% block title %}{% if is_edit %}Edit your profile{% else %}Profile details{% endif %} · NYC Active{% endblock %}
+{% block auth_title %}{% if is_edit %}Edit your profile{% else %}Complete your profile{% endif %}{% endblock %}
+{% block auth_subtitle %}{% if is_edit %}Update your profile details.{% else %}These details are optional. You can skip them and add them later.{% endif %}{% endblock %}
+
+{% block auth_form %}
+<form method="post" class="auth-form" autocomplete="off">
+  {% csrf_token %}
+  {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+  {% include "includes/form_field.html" with field=form.display_username %}
+  {% include "includes/form_field.html" with field=form.first_name %}
+  {% include "includes/form_field.html" with field=form.last_name %}
+  {% include "includes/form_field.html" with field=form.bio %}
+  {% include "includes/form_field.html" with field=form.home_borough %}
+  <div class="field profile-sports-picker">
+    <label for="profile-sport-summary">Favorite sports</label>
+    <details class="profile-sport-dropdown" id="profile-sport-dropdown">
+      <summary id="profile-sport-summary">Choose sports</summary>
+      <div class="profile-sport-panel">
+        <div class="profile-sport-list" id="profile-sport-list" aria-label="Choose favorite sports">
+          {% for checkbox in form.favorite_sports %}
+            <label class="profile-sport-option" data-sport-option>
+              {{ checkbox.tag }}
+              <span>{{ checkbox.choice_label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+    </details>
+    {% for error in form.favorite_sports.errors %}
+      <p class="field-error">{{ error }}</p>
+    {% endfor %}
+  </div>
+  <div class="profile-sport-add">
+    {% include "includes/form_field.html" with field=form.custom_sport %}
+    <button class="btn btn--ghost" type="button" id="add-custom-sport">Add sport</button>
+  </div>
+  {% include "includes/form_field.html" with field=form.skill_level %}
+  <div class="profile-setup-actions">
+    <button type="submit" class="btn btn--primary btn--block">Save profile details</button>
+    {% if not is_edit %}
+      <a class="btn btn--ghost btn--block" href="{% url 'home' %}">Skip for now</a>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}
+
+{% block auth_switch_wrapper %}{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/sport-picker.js' %}" defer></script>
+{% endblock %}

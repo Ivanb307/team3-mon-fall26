@@ -12,7 +12,7 @@
     </div>
     <h1 class="event-card-title">{{ event.activity }}</h1>
     <p class="event-card-subtitle">
-      Hosted by <strong>{{ event.organizer.username }}</strong>
+      Hosted by <strong>{{ event.organizer.profile.display_username|default:event.organizer.username }}</strong>
     </p>
   </header>
 
@@ -55,4 +55,3 @@
   </section>
 </article>
 {% endblock %}
-

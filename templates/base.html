@@ -18,8 +18,9 @@
       <a class="brand" href="/">{% include "includes/logo.html" %}</a>
       <nav class="site-nav" aria-label="Account">
         {% if user.is_authenticated %}
-          <span class="site-nav-user">{{ user.username }}</span>
+          <span class="site-nav-user">{{ user.profile.display_username|default:user.username }}</span>
           <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>
+          <a class="btn btn--ghost" href="{% url 'edit_profile' %}">View profile</a>
           <form method="post" action="{{ logout_url|default:'/logout/' }}">
             {% csrf_token %}
             <button type="submit" class="btn btn--ghost">Log out</button>
@@ -39,6 +40,7 @@
     </main>
   {% endblock %}
 
+  <script src="{% static 'js/profile-message.js' %}" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

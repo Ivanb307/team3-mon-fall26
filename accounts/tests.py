@@ -2,6 +2,7 @@ import shutil
 import tempfile
 from io import BytesIO
 from unittest import mock
+from unittest.mock import ANY, patch
 
 from django.contrib.auth import authenticate, get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -61,7 +62,18 @@ class RegisterTests(TestCase):
         self.assertContains(response, 'autocomplete="off"')
 
     def test_profile_setup_requires_login(self):
-        self.assertRedirects(self.client.get(reverse('register_profile')), reverse('register'))
+        response = self.client.get(reverse('register_profile'))
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={reverse("register_profile")}',
+        )
+
+    def test_edit_profile_requires_login_and_preserves_return_url(self):
+        response = self.client.get(reverse('edit_profile'))
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={reverse("edit_profile")}',
+        )
 
     def test_valid_signup_creates_account_and_empty_profile_then_redirects_to_profile(self):
         response = self.post_register()
@@ -213,6 +225,26 @@ class RegisterTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('display_username', response.context['form'].errors)
 
+    def test_profile_edit_rejects_invalid_username_characters(self):
+        user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
+        Profile.objects.create(user=user, display_username='parkfan')
+        self.client.force_login(user)
+
+        response = self.client.post(reverse('edit_profile'), {
+            'display_username': 'Park Fan <3 !!',
+            'bio': '',
+            'first_name': '',
+            'last_name': '',
+            'home_borough': '',
+            'favorite_sports': [],
+            'skill_level': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('display_username', response.context['form'].errors)
+        user.refresh_from_db()
+        self.assertEqual(user.username, 'parkfan')
+
     def test_profile_username_database_constraint_is_case_insensitive(self):
         first = User.objects.create_user('first', 'first@nyu.edu', PASSWORD)
         second = User.objects.create_user('second', 'second@nyu.edu', PASSWORD)
@@ -287,6 +319,22 @@ class RegisterTests(TestCase):
         response = self.post_register(password1='12345678', password2='12345678')
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['form'].errors)
+        self.assertFalse(User.objects.exists())
+
+    def test_password_similar_to_public_username_is_rejected(self):
+        response = self.post_register(
+            display_username='riverrunner',
+            password1='riverrunner1',
+            password2='riverrunner1',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('password2', response.context['form'].errors)
+        self.assertFalse(User.objects.exists())
+
+    def test_signup_rejects_invalid_username_characters(self):
+        response = self.post_register(display_username='Park Fan <3 !!')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('display_username', response.context['form'].errors)
         self.assertFalse(User.objects.exists())
 
     def test_logged_in_users_are_sent_home(self):
@@ -368,6 +416,12 @@ class LoginTests(TestCase):
             self.assertContains(response, 'Invalid email or password')
             self.assertNotIn('_auth_user_id', self.client.session)
 
+    def test_unknown_account_performs_a_dummy_password_hash(self):
+        with patch.object(User, 'set_password', autospec=True) as set_password:
+            self.assertIsNone(authenticate(username='nobody@nyu.edu', password=PASSWORD))
+
+        set_password.assert_called_once_with(ANY, PASSWORD)
+
     def test_logout_requires_post_and_ends_the_session(self):
         self.client.force_login(self.user)
         response = self.client.post(reverse('logout'))
@@ -405,6 +459,7 @@ class LandingLinksTests(TestCase):
 
         self.assertContains(response, 'Profile details saved.')
         self.assertContains(response, 'data-auto-dismiss="2000"')
+        self.assertContains(response, 'class="alert alert--success"')
 
     def test_signup_goes_to_profile_setup_without_a_banner(self):
         response = self.client.post(reverse('register'), {

@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth import login
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect
 from django.views.generic import FormView
@@ -35,14 +36,9 @@ class RegisterView(FormView):
         return redirect('register_profile')
 
 
-class ProfileSetupView(FormView):
+class ProfileSetupView(LoginRequiredMixin, FormView):
     template_name = 'registration/profile_setup.html'
     form_class = ProfileSetupForm
-
-    def dispatch(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return redirect('register')
-        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -67,5 +63,5 @@ class ProfileSetupView(FormView):
         except IntegrityError:
             form.add_error('display_username', 'That username is no longer available. Please choose another username.')
             return self.form_invalid(form)
-        messages.success(self.request, 'Profile details saved.')
+        messages.success(self.request, 'Profile details saved.', extra_tags='auto-dismiss')
         return redirect('home')

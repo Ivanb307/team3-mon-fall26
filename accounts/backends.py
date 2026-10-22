@@ -16,6 +16,7 @@ class EmailOrUsernameBackend(ModelBackend):
             user = users.filter(username=username, is_staff=True).first()
 
         if user is None:
+            get_user_model()().set_password(password)
             return None
 
         return super().authenticate(

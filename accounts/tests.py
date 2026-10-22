@@ -461,13 +461,21 @@ class LandingLinksTests(TestCase):
         self.assertContains(response, 'data-auto-dismiss="2000"')
         self.assertContains(response, 'class="alert alert--success"')
 
-    def test_signup_goes_to_profile_setup_without_a_banner(self):
+    def test_signup_goes_to_profile_setup_with_a_welcome_but_no_banner(self):
         response = self.client.post(reverse('register'), {
             'display_username': 'parkfan', 'email': 'parkfan@nyu.edu',
             'password1': PASSWORD, 'password2': PASSWORD,
         }, follow=True)
         self.assertContains(response, 'Complete your profile')
+        self.assertContains(response, 'Welcome to NYC Active!')
         self.assertNotContains(response, 'class="alert')
+
+    def test_profile_edit_page_has_no_welcome(self):
+        self.client.force_login(User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD))
+
+        response = self.client.get(reverse('edit_profile'))
+
+        self.assertNotContains(response, 'Welcome to NYC Active!')
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)

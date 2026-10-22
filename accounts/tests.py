@@ -445,8 +445,10 @@ class LandingLinksTests(TestCase):
 
         self.assertTemplateUsed(response, 'home.html')
         self.assertTemplateNotUsed(response, 'landing.html')
-        self.assertContains(response, 'More features coming soon')
-        self.assertContains(response, f'class="btn btn--primary" href="{reverse("event_create")}">Create event</a>')
+        self.assertContains(response, 'Welcome back, @parkfan')
+        self.assertContains(response, 'Park and event search are coming soon.')
+        create_link = f'class="btn btn--primary" href="{reverse("event_create")}">Create event</a>'
+        self.assertContains(response, create_link, count=2)
         profile_url = reverse('public_profile', args=['parkfan'])
         self.assertContains(response, f'href="{profile_url}">View profile</a>')
         self.assertContains(response, f'href="{reverse("edit_profile")}">Profile settings</a>')
@@ -826,3 +828,21 @@ class ProfileSettingsTests(TestCase):
         response = self.client.get(self.url)
 
         self.assertContains(response, 'Your first and last name stay private.')
+
+
+class TopBarTests(TestCase):
+    def test_create_event_is_in_the_top_bar_on_other_pages(self):
+        user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('public_profile', args=['parkfan']))
+
+        self.assertContains(response, f'href="{reverse("event_create")}">Create event</a>')
+
+    def test_logged_out_visitors_get_no_create_event_button(self):
+        User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
+
+        response = self.client.get(reverse('public_profile', args=['parkfan']))
+
+        self.assertNotContains(response, '>Create event</a>')
+        self.assertContains(response, '>Log in</a>')

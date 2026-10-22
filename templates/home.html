@@ -4,9 +4,20 @@
 {% block body_class %}page--plain{% endblock %}
 
 {% block content %}
+{% url 'event_list' as events_url %}
 <section class="home-placeholder">
-  <h1>More features coming soon</h1>
-  <p>Park search, game listings and more are on the way. In the meantime, start a game.</p>
-  <a class="btn btn--primary" href="{% url 'event_create' %}">Create event</a>
+  <h1>Welcome back, @{{ user.profile.display_username|default:user.username }}</h1>
+  {% if events_url %}
+    <p>Find a game near you or start your own.</p>
+  {% else %}
+    <p>Start a game now. Park and event search are coming soon.</p>
+  {% endif %}
+  <div class="home-actions">
+    <a class="btn btn--primary" href="{% url 'event_create' %}">Create event</a>
+    {# Shows once the event feed from #68 is merged. #}
+    {% if events_url %}
+      <a class="btn btn--ghost" href="{{ events_url }}">Browse events</a>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}

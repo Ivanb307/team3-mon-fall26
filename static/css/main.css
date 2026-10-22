@@ -286,6 +286,13 @@ a {
   color: var(--muted);
 }
 
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
 .site-main {
   max-width: 960px;
   padding: 32px 16px;

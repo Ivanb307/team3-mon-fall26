@@ -13,12 +13,14 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% block header %}
-    {% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'logout' as logout_url %}{% url 'event_create' as event_create_url %}
+    {% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'logout' as logout_url %}{% url 'event_create' as event_create_url %}{% url 'event_list' as event_list_url %}
     <header class="site-header">
       <a class="brand" href="/">{% include "includes/logo.html" %}</a>
       <nav class="site-nav" aria-label="Account">
+        {% if event_list_url %}<a class="site-nav-link" href="{{ event_list_url }}">Browse events</a>{% endif %}
         {% if user.is_authenticated %}
           {% url 'public_profile' username=user.username as profile_url %}{% url 'edit_profile' as edit_profile_url %}
+          <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>
           {% with nav_name=user.profile.display_username|default:user.username %}
           <details class="account-menu" id="account-menu">
             <summary aria-label="{{ nav_name }} account menu">

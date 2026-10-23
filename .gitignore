@@ -10,3 +10,4 @@ media/
 .env.*
 !.env.example
 *.sqlite3-*
+.DS_Store

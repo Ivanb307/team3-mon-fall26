@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   {% block header %}
     {% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'logout' as logout_url %}{% url 'event_create' as event_create_url %}{% url 'event_list' as event_list_url %}
     <header class="site-header">
@@ -19,13 +19,34 @@
       <nav class="site-nav" aria-label="Account">
         {% if event_list_url %}<a class="site-nav-link" href="{{ event_list_url }}">Browse events</a>{% endif %}
         {% if user.is_authenticated %}
-          <span class="site-nav-user">{{ user.profile.display_username|default:user.username }}</span>
+          {% url 'public_profile' username=user.username as profile_url %}{% url 'edit_profile' as edit_profile_url %}
           <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>
-          <a class="btn btn--ghost" href="{% url 'edit_profile' %}">View profile</a>
-          <form method="post" action="{{ logout_url|default:'/logout/' }}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn--ghost">Log out</button>
-          </form>
+          {% with nav_name=user.profile.display_username|default:user.username %}
+          <details class="account-menu" id="account-menu">
+            <summary aria-label="{{ nav_name }} account menu">
+              <span class="nav-avatar">
+                {% if user.profile.avatar %}
+                  <img src="{{ user.profile.avatar.url }}" alt="">
+                {% else %}
+                  <span class="profile-photo-placeholder" aria-hidden="true"></span>
+                {% endif %}
+              </span>
+              <span class="account-menu-text">
+                <span class="account-menu-name">{{ nav_name }}</span>
+                <span class="account-menu-role">{% if user.is_staff %}Admin{% else %}Member{% endif %}</span>
+              </span>
+            </summary>
+            <div class="account-menu-panel">
+              <a class="account-menu-item account-menu-item--profile" href="{{ profile_url }}">View profile</a>
+              <a class="account-menu-item account-menu-item--edit" href="{{ edit_profile_url }}">Profile settings</a>
+              <hr class="account-menu-divider">
+              <form method="post" action="{{ logout_url|default:'/logout/' }}">
+                {% csrf_token %}
+                <button type="submit" class="account-menu-item account-menu-item--logout">Log out</button>
+              </form>
+            </div>
+          </details>
+          {% endwith %}
         {% else %}
           <a class="btn btn--ghost" href="{{ login_url|default:'/login/' }}">Log in</a>
           <a class="btn btn--primary" href="{{ register_url|default:'/register/' }}">Sign up</a>
@@ -42,6 +63,7 @@
   {% endblock %}
 
   <script src="{% static 'js/profile-message.js' %}" defer></script>
+  <script src="{% static 'js/account-menu.js' %}" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

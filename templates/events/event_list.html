@@ -57,9 +57,10 @@
             <span class="discover-body">
               <span class="event-badges">
                 <span class="event-badge">{{ event.park.get_borough_display }}</span>
+                <span class="event-badge">{{ event.get_activity_display }}</span>
                 <span class="event-badge event-badge--outline">{{ event.get_skill_level_display }}</span>
               </span>
-              <span class="discover-name">{{ event.activity }}</span>
+              <span class="discover-name">{{ event.display_title }}</span>
               <span class="discover-meta">
                 <span>{{ event.date|date:"D, M j" }} · {{ event.time|time:"g:i A" }}</span>
                 <span>{{ event.park.name }}</span>

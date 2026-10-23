@@ -437,7 +437,7 @@ class LandingLinksTests(TestCase):
         self.assertContains(response, f'href="{reverse("login")}"')
         self.assertContains(response, f'href="{reverse("register")}"')
 
-    def test_signed_in_home_is_a_placeholder_with_create_event_and_account_menu(self):
+    def test_signed_in_home_has_create_event_browse_events_and_account_menu(self):
         user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
         self.client.force_login(user)
 

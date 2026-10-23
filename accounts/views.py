@@ -33,7 +33,6 @@ class RegisterView(FormView):
             return self.form_invalid(form)
 
         login(self.request, user)
-        messages.success(self.request, 'Account created. Welcome to NYC Active!')
         return redirect('register_profile')
 
 

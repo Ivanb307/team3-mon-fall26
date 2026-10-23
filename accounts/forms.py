@@ -1,12 +1,21 @@
+from io import BytesIO
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import UploadedFile
+from django.db import transaction
+from PIL import Image, ImageOps
 
 from parks.models import Borough
 
 from .models import Profile, ProfileSkillLevel
 
+
+AVATAR_MAX_BYTES = 5 * 1024 * 1024
+AVATAR_SIZE = 512
 
 COMMON_SPORTS = (
     'Basketball',
@@ -74,7 +83,32 @@ class RegisterForm(UserCreationForm):
         return email
 
 
+def square_avatar(upload):
+    # Re-encoding also drops EXIF data such as the GPS location of phone photos.
+    with Image.open(upload) as image:
+        image = ImageOps.exif_transpose(image)
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGBA')
+            background = Image.new('RGB', image.size, 'white')
+            background.paste(image, mask=image.getchannel('A'))
+            image = background
+        image = ImageOps.fit(image.convert('RGB'), (AVATAR_SIZE, AVATAR_SIZE))
+        buffer = BytesIO()
+        image.save(buffer, format='JPEG', quality=85)
+    return ContentFile(buffer.getvalue(), name='avatar.jpg')
+
+
 class ProfileSetupForm(forms.ModelForm):
+    avatar = forms.ImageField(
+        label='Profile photo',
+        required=False,
+        widget=forms.FileInput(attrs={
+            'accept': 'image/jpeg,image/png,image/webp',
+            'class': 'profile-photo-input',
+        }),
+    )
+    # Set by the photo's X button (profile-photo.js).
+    remove_avatar = forms.BooleanField(required=False, widget=forms.HiddenInput)
     display_username = forms.CharField(
         max_length=150,
         label='Username',
@@ -117,7 +151,7 @@ class ProfileSetupForm(forms.ModelForm):
 
     class Meta:
         model = Profile
-        fields = ('display_username', 'bio', 'home_borough', 'favorite_sports', 'skill_level')
+        fields = ('avatar', 'display_username', 'bio', 'home_borough', 'favorite_sports', 'skill_level')
         labels = {
             'home_borough': 'Home borough',
             'skill_level': 'Overall skill level',
@@ -125,6 +159,7 @@ class ProfileSetupForm(forms.ModelForm):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.saved_avatar_name = self.instance.avatar.name
         if user is not None:
             current_username = self.instance.display_username or user.username
             self.fields['display_username'].widget.attrs['placeholder'] = current_username
@@ -172,6 +207,19 @@ class ProfileSetupForm(forms.ModelForm):
                 raise forms.ValidationError('That username is already in use.')
         return display_username
 
+    def clean_avatar(self):
+        avatar = self.cleaned_data.get('avatar')
+        if not isinstance(avatar, UploadedFile):
+            return avatar
+        if avatar.size > AVATAR_MAX_BYTES:
+            raise forms.ValidationError('Choose a photo under 5 MB.')
+        try:
+            return square_avatar(avatar)
+        except (OSError, SyntaxError, ValueError, EOFError, Image.DecompressionBombError):
+            # ImageField only checks the file header, so damaged files such as a
+            # truncated JPEG get this far and fail once the pixels are decoded.
+            raise forms.ValidationError(self.fields['avatar'].error_messages['invalid_image'])
+
     def clean_favorite_sports(self):
         return self.normalize_sports(self.cleaned_data['favorite_sports'])
 
@@ -183,7 +231,18 @@ class ProfileSetupForm(forms.ModelForm):
                 cleaned_data.get('custom_sport', ''),
             ]
             cleaned_data['favorite_sports'] = self.normalize_sports(sports)
+        # A new upload wins over "Remove photo". False tells Django to clear the field.
+        if cleaned_data.get('remove_avatar') and not self.files.get(self.add_prefix('avatar')):
+            cleaned_data['avatar'] = False
         return cleaned_data
+
+    def save(self, commit=True):
+        profile = super().save(commit)
+        old_name = self.saved_avatar_name
+        if commit and old_name and profile.avatar.name != old_name:
+            storage = profile.avatar.storage
+            transaction.on_commit(lambda: storage.delete(old_name))
+        return profile
 
     @staticmethod
     def normalize_sports(sports):

@@ -3,12 +3,36 @@
 
 {% block title %}{% if is_edit %}Edit your profile{% else %}Profile details{% endif %} · NYC Active{% endblock %}
 {% block auth_title %}{% if is_edit %}Edit your profile{% else %}Complete your profile{% endif %}{% endblock %}
-{% block auth_subtitle %}{% if is_edit %}Update your profile details.{% else %}These details are optional. You can skip them and add them later.{% endif %}{% endblock %}
+{% block auth_subtitle %}{% if is_edit %}Update your profile details.{% else %}Welcome to NYC Active! These details are optional. You can skip them and add them later.{% endif %}{% endblock %}
 
 {% block auth_form %}
-<form method="post" class="auth-form" autocomplete="off">
+<form method="post" class="auth-form" autocomplete="off" enctype="multipart/form-data">
   {% csrf_token %}
   {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+  {% with saved_avatar=form.initial.avatar %}
+  <div class="profile-photo{% if form.avatar.errors %} field--error{% endif %}">
+    <div class="profile-photo-frame">
+      <div class="profile-photo-preview" id="profile-photo-preview">
+        {% if saved_avatar %}
+          <img src="{{ saved_avatar.url }}" alt="Your profile photo">
+        {% else %}
+          <span class="profile-photo-placeholder" aria-hidden="true"></span>
+        {% endif %}
+      </div>
+      <button type="button" class="profile-photo-remove" id="profile-photo-remove" aria-label="Remove photo" title="Remove photo"{% if not saved_avatar %} hidden{% endif %}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    {{ form.avatar }}
+    <label class="btn btn--ghost" for="{{ form.avatar.id_for_label }}" id="profile-photo-button">
+      {% if saved_avatar %}Change photo{% else %}Upload photo{% endif %}
+    </label>
+    {% for error in form.avatar.errors %}
+      <p class="field-error">{{ error }}</p>
+    {% endfor %}
+    <p class="field-help">JPG, PNG or WebP, up to 5 MB.</p>
+  </div>
+  {% endwith %}
   {% include "includes/form_field.html" with field=form.display_username %}
   {% include "includes/form_field.html" with field=form.first_name %}
   {% include "includes/form_field.html" with field=form.last_name %}
@@ -51,4 +75,5 @@
 
 {% block scripts %}
 <script src="{% static 'js/sport-picker.js' %}" defer></script>
+<script src="{% static 'js/profile-photo.js' %}" defer></script>
 {% endblock %}

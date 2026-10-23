@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block header %}
-{% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'logout' as logout_url %}{% url 'event_create' as event_create_url %}
+{% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'logout' as logout_url %}{% url 'event_create' as event_create_url %}{% url 'event_list' as event_list_url %}
 <header class="lp-nav" data-nav>
   <div class="lp-container lp-nav-inner">
     <a class="brand" href="/">{% include "includes/logo.html" %}</a>
@@ -21,6 +21,7 @@
       <a href="#faq">FAQ</a>
     </nav>
     <div class="lp-nav-actions">
+      {% if event_list_url %}<a class="lp-nav-login lp-nav-browse" href="{{ event_list_url }}">Browse events</a>{% endif %}
       {% if user.is_authenticated %}
         <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>
         <a class="btn btn--ghost" href="{% url 'public_profile' username=user.username %}">View profile</a>
@@ -38,7 +39,7 @@
 {% endblock %}
 
 {% block main %}
-{% url 'login' as login_url %}{% url 'register' as register_url %}
+{% url 'login' as login_url %}{% url 'register' as register_url %}{% url 'event_list' as event_list_url %}
 <main class="lp">
 
   <section class="lp-hero">
@@ -54,7 +55,7 @@
       <p class="lp-hero-sub">Pickup games and park meetups across all five boroughs. Join one in a tap, or start your own.</p>
       <div class="lp-hero-ctas">
         <a class="btn lp-btn-lime lp-btn-lg" href="{{ register_url|default:'/register/' }}">Create a free account</a>
-        <a class="btn lp-btn-outline lp-btn-lg" href="#events">See what's on</a>
+        <a class="btn lp-btn-outline lp-btn-lg" href="{{ event_list_url|default:'#events' }}">See what's on</a>
       </div>
     </div>
   </section>

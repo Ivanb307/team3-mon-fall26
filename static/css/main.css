@@ -1043,6 +1043,295 @@ a:focus-visible {
   color: var(--ink-2);
 }
 
+/* Event discovery feed (#25) */
+
+.discover {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.discover-head {
+  margin-bottom: 20px;
+}
+
+.discover-title {
+  margin: 0 0 4px;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--green-900);
+}
+
+.discover-sub {
+  margin: 0;
+  color: var(--muted);
+}
+
+.discover-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: end;
+  gap: 12px 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.discover-field {
+  display: grid;
+  gap: 6px;
+}
+
+.discover-field label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.discover-field select,
+.discover-field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.discover-field select:focus,
+.discover-field input:focus {
+  outline: 2px solid var(--green-600);
+  outline-offset: 1px;
+}
+
+.discover-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-size: 0.9375rem;
+  color: var(--ink-2);
+}
+
+.discover-check input {
+  accent-color: var(--green-700);
+}
+
+.discover-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.discover-clear {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.discover-count {
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.discover-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.discover-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--green-700);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.discover-item:hover {
+  box-shadow: 0 6px 16px rgba(5, 61, 39, 0.12);
+  transform: translateY(-1px);
+}
+
+.discover-item.is-past {
+  opacity: 0.65;
+  border-left-color: var(--muted);
+}
+
+.discover-link {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.discover-link:focus-visible {
+  outline: 2px solid var(--green-600);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+.discover-date {
+  display: grid;
+  justify-items: center;
+  width: 60px;
+  padding: 6px 0;
+  line-height: 1.1;
+  color: var(--green-900);
+  background: var(--green-50);
+  border-radius: var(--radius);
+}
+
+.discover-date-dow,
+.discover-date-mon {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.discover-date-day {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.discover-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.discover-body .event-badges {
+  margin-bottom: 4px;
+}
+
+.event-badge--outline {
+  color: var(--green-700);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--green-700);
+}
+
+.discover-name {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.discover-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.discover-capacity {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+}
+
+.discover-spots {
+  font-weight: 600;
+  color: var(--green-700);
+}
+
+.discover-spots--ended {
+  color: var(--muted);
+}
+
+.discover-spots-sub {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.discover-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.discover-empty p {
+  margin: 0;
+}
+
+.discover-pages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  color: var(--muted);
+}
+
+.event-back-link {
+  display: block;
+  max-width: 680px;
+  margin: 0 auto 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 600px) {
+  .discover-link {
+    grid-template-columns: auto 1fr;
+  }
+
+  .discover-capacity {
+    grid-column: 1 / -1;
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+.site-nav-link {
+  padding: 8px 10px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-nav-link:hover {
+  color: var(--green-700);
+}
+
+@media (max-width: 520px) {
+  .site-header {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+
+  .site-nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+/* Landing nav: on phones the hero's "See what's on" button links to the feed instead. */
+@media (max-width: 560px) {
+  .lp-nav-browse {
+    display: none;
+  }
+}
+
 /* Public profile (#13): same plain layout and sections as Profile settings */
 .profile-card-header {
   display: flex;

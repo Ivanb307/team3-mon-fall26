@@ -3,6 +3,7 @@
 {% block title %}{{ event.activity }} at {{ event.park.name }} · NYC Active{% endblock %}
 
 {% block content %}
+<a class="event-back-link" href="{% url 'event_list' %}">&larr; All upcoming events</a>
 <article class="event-card">
   <header class="event-card-header">
     <div class="event-badges">

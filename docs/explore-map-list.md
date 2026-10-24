@@ -72,8 +72,9 @@ other stories.
 
 `GET /events/api/map/` returns all displayed parks with coordinates (not a page):
 `parks: [{id, name, borough, lat, lng, event_count, preview_url}]` and
-`unmapped_event_count`. The public endpoint uses two SQL queries regardless of
-the number of pins. Personal scopes require login and use the authenticated user;
+`unmapped_event_count`. The endpoint uses two data queries regardless of the
+number of pins, plus active-park validation when a `park` parameter is supplied.
+Personal scopes require login and use the authenticated user;
 caller-supplied user IDs are never accepted.
 
 Cluster icons sum matching events rather than park counts. Zero-event pins and

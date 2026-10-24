@@ -4,7 +4,7 @@ Map, Events list, Parks list and the park panel must use the same membership
 rules and URL state. This PR extracts that common backend before the map/UI
 changes so bundle 3 can build on a stable interface.
 
-**Depends on PR #77. Merge #77 before this PR.** No models, migrations, map
+Built on the shared schema from merged PR #77. No models, migrations, map
 libraries, AWS resources or hub/navigation changes are added by this step.
 This does not finish or close #17, #16, #78, or another person's filter story.
 

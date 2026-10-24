@@ -15,7 +15,8 @@ def filter_events(params):
     """Apply discovery-feed filters from a GET QueryDict.
 
     Upcoming scheduled events by default; ?include_past=1 also shows past ones.
-    Optional: ?borough=<code>, ?skill=<level>, ?activity=<text> (case-insensitive contains).
+    Optional: ?borough=<code>, ?skill=<level>, ?activity=<text> (case-insensitive contains on the
+    standard Activity value, e.g. "frisbee" matches "ultimate_frisbee"; replaced by #19/#75).
     Returns (queryset, cleaned_filters).
     """
     include_past = params.get('include_past') == '1'
@@ -73,7 +74,10 @@ class EventListView(ListView):
 def serialize_event(event):
     return {
         'id': event.pk,
+        'title': event.display_title,
         'activity': event.activity,
+        'activity_label': event.get_activity_display(),
+        'meeting_spot': event.meeting_spot,
         'skill_level': event.skill_level,
         'skill_level_label': event.get_skill_level_display(),
         'date': event.date.isoformat(),

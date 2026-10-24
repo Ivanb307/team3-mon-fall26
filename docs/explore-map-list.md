@@ -4,27 +4,29 @@
 
 Yueli owns #16 (US-2.1), #17 (US-2.2), and the newly assigned #78 (US-2.8).
 
-1. Foundation #77 has been reviewed and approved; its author still needs to merge it.
-2. **PR #83** (`feature/explore-filter-base`) is the early shared-filter step of
-   #17. It is a draft until #77 merges. See `explore-filter-contract.md` for the
-   stable interface Rae's bundle 3 should extend. It does not close #17.
-3. This local branch now builds on #83 and retains the map, clustering, map/list
-   and Events/Parks presentation. The shared filter partial, stylesheet and query
-   helpers are reused directly, so the map follow-up won't replace Rae's widgets.
-4. **#78 remains to implement in the follow-up**: a shared Events hub header,
-   Explore/Create main toggle, Events navbar label, My Events account link, and
-   session restoration of the last results query (including view/tab/park state).
-   Include the hub partial on Explore, create and event detail; provide it for
-   the owner of #21 to include on park detail. Keep #22's title-field work with
-   bundle 5 rather than changing its form fields here.
+1. Foundation #77 is merged into `develop`.
+2. **PR #83** (`feature/explore-filter-base`) supplies the early shared-filter
+   step of #17. It is ready for review and must merge first. See
+   `explore-filter-contract.md` for Rae's stable interface. It does not close #17.
+3. This follow-up reuses #83's filter engine, filter partial and stylesheet
+   without replacing them. It adds the map, clustering, map/list and Events/Parks
+   presentations and the #78 Events hub navigation.
+4. Shared hub header: `{% include "events/_hub_header.html" with active="explore" back=True %}`.
+   It is included on Explore, event creation and event detail. The owner of #21
+   can include it on the future park-detail page without a view mixin. The
+   creation page uses `active="create"`. Only navigation is added to the existing
+   creation form; its field/schema work remains with bundle 5.
+5. The Events navbar points to `/events/` (default map), the existing Create event
+   shortcut remains, and the account menu includes My Events (`?scope=mine`).
+   Anonymous users choosing Create Event log in and return to that form.
 
-Merge order: #77, then #83, then the map/list/hub follow-up when reviewed. Rae
-can branch from updated develop after #83 merges. Do not close #18/#19/#20/#70
-or #21/#23/#79 as part of Yueli's map or hub work.
+Merge order: #83, then this follow-up after review. Its diff against `develop`
+includes #83 until that PR merges; compare against `feature/explore-filter-base`
+to review only the map/list/hub addition. It does not close #18/#19/#20/#70,
+#21/#23/#79 or any other teammate's stories.
 
-This branch builds on PR #77's shared schema. It adds no models, migrations,
-credentials, paid map SDK or AWS resources. Review and merge #77 first; then
-sync this branch with develop before opening the feature PR.
+No models, migrations, credentials, paid map SDK or AWS resources are added.
+No live deployment is performed while these changes remain in feature PRs.
 
 ## Local preview
 
@@ -62,6 +64,17 @@ Parameters: `q`, `borough`, repeated `zip`, repeated `sport`, repeated `facility
 `view=map|list` and `tab=events|parks`. Default view is map and default tab events;
 both list tabs have 20 cards per page. The old `include_past` option is retired.
 
+The hub stores only validated Explore state in the user's Django session,
+including the current page. APIs, previews and invalid pages never replace it.
+Explore Events / Back to results / Cancel restore that state; without a saved
+search they fall back to `/events/`. Arbitrary `next` or external return URLs
+are never stored. Opening a pin or Quick view navigates to the same Explore
+URL with `park=<id>&panel=1`; the selected park and preview survive refresh,
+sharing and a round trip to event detail. `panel` is presentation-only and does
+not change filter-engine membership. Closing removes the selected park/panel;
+See events at this park retains the park filter with no panel so the list is
+readable. This uses normal navigation and avoids async session-write races.
+
 The basic server-rendered controls and backend predicates establish the shared
 interface. Coordinate with the owners of #18/#19/#70/#75/#76 before replacing
 their UI: lookahead/pill selectors and richer empty-state/capacity/host controls
@@ -83,10 +96,11 @@ JavaScript-disabled browsers see a notice and the list immediately.
 
 ## Park preview and future park detail integration
 
-Pins and Quick view open a small read-only dialog using the shared filter engine.
-Its endpoint is `/events/parks/<pk>/preview/`. This is an integration point for the
-US-2.9 park panel, not a second full park detail implementation. Without JS the
-Quick view link opens the server-rendered preview. If #21 provides a named
+Pins and Quick view open a small server-rendered read-only dialog using the
+shared filter engine. `/events/parks/<pk>/preview/` also exposes the same partial
+for the future panel. This is an integration point for US-2.9, not the full park
+panel/detail story. Without JS, Quick view still navigates to a readable preview
+and a close link alongside the server-rendered results. If #21 provides a named
 `park_detail` route accepting `pk`, Park details links appear automatically;
 until then no broken `/parks/<id>/` link is emitted. Ratings show Not yet rated
 until #42 exists. Confirm those route/panel contracts with their story owners.
@@ -109,6 +123,7 @@ References:
 ```sh
 python manage.py test
 python -m unittest discover -s infra -p 'test_*.py'
+node --test events/js/explore.test.cjs
 python manage.py makemigrations --check --dry-run
 ```
 
@@ -118,3 +133,20 @@ exclusions and personal scope isolation, whole-token facilities and zip codes,
 NY date boundaries, invalid ranges, escaping, preview filtering, and constant
 map query count. Browser checks should include clustering, pin preview,
 Map/List/Events/Parks navigation, a repeated filter selection, and map failure.
+
+Hub regressions in `events/test_hub.py` cover the actual login/next round trip,
+active navigation, repeated filter/page/panel restoration, session isolation,
+invalid and unrelated URL parameters, and the reusable park-page header.
+`events/js/explore.test.cjs` runs the shipped map controller with small DOM and
+Leaflet adapters to check cluster event sums, muted pins, pin/close navigation,
+unmapped notices, checkbox submission and data/tile/library failures. GitHub CI
+runs it with Node's built-in runner; there are no npm dependencies.
+
+Validation on 2026-10-24: 168 Django tests, 30 infrastructure safeguard tests and
+5 Node interaction tests passed; migration drift, dependency consistency,
+Django checks, production compressed static manifest and whitespace checks
+passed. Edge verified default clustering, pin selection, event-detail round
+trip with the selected park restored, viewing park events without reopening
+the preview, Events/Parks and Map/List switches with two zip values, anonymous
+Create Event login/return, and the authenticated My Events shortcut. Local
+preview uses public NYC park data and optional sample events, not AWS data.

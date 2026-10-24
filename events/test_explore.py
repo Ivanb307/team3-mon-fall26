@@ -208,3 +208,22 @@ class ExploreTests(TestCase):
         self.event(date=self.now.date()-datetime.timedelta(days=1))
         self.assertEqual(self.client.get('/events/api/upcoming/?include_past=1').json()['count'],0)
         self.assertNotContains(self.client.get('/events/'),'Include past events')
+
+    def test_parks_tab_orders_event_parks_first_and_paginates_with_repeated_filters(self):
+        self.event()
+        self.event()
+        Park.objects.bulk_create([
+            Park(gispropnum=f'PAGE{i}', name=f'Nearby {i:02}', borough='B', zipcode='11222')
+            for i in range(23)
+        ])
+        response = self.client.get('/events/?view=list&tab=parks&zip=11211&zip=11222')
+        self.assertEqual(response.context['park_total'], 24)
+        self.assertEqual(len(response.context['parks']), 20)
+        self.assertEqual(response.context['parks'][0].pk, self.mccarren.pk)
+        self.assertContains(response, '2 matching events')
+        links = [unescape(href) for href in re.findall(r'href="([^"]+)"', response.content.decode())]
+        next_url = next(link for link in links if 'page=2' in link)
+        params = parse_qs(urlsplit(next_url).query)
+        self.assertEqual(params['zip'], ['11211', '11222'])
+        self.assertEqual(params['tab'], ['parks'])
+        self.assertEqual(len(self.client.get('/events/' + next_url).context['parks']), 4)

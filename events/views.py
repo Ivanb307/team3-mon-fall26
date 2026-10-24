@@ -8,9 +8,10 @@ from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DetailView, ListView
 
-from parks.models import Facility, Park
+from parks.models import Facility
 
 from .forms import EventCreateForm
+from .hub import remember_explore
 from .models import Event
 from .explore import (configure_filter_form, displayed_parks, facility_labels,
                       filter_params, filter_pills, matching_events, parse_filters)
@@ -58,6 +59,9 @@ class EventListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         params = filter_params(self.filters)
+        panel = bool(self.filters['park'] and self.request.GET.get('panel') == '1')
+        if panel:
+            params['panel'] = '1'
         configure_filter_form(self.filter_form, self.filters)
         if self.filters['tab'] == 'parks':
             context['parks'] = context['object_list']
@@ -69,6 +73,12 @@ class EventListView(ListView):
             explore_params=params, map_url=reverse('event_map_api') + '?' + params.urlencode(),
             event_total=matching_events(self.filters, self.request.user).count(),
             park_total=displayed_parks(self.filters, self.request.user).count())
+        if panel:
+            selected = displayed_parks(self.filters, self.request.user).prefetch_related('facilities').first()
+            if selected:
+                context.update(park_preview_context(selected, self.filters, self.request.user))
+                context['selected_park'] = selected
+        remember_explore(self.request, self.filters, context['page_obj'].number, panel=panel)
         return context
 
 
@@ -133,15 +143,19 @@ def explore_park_preview(request, pk):
     if redirect:
         return redirect
     park = get_object_or_404(displayed_parks(filters, request.user).prefetch_related('facilities'), pk=pk)
+    return render(request, 'events/includes/park_preview.html', park_preview_context(park, filters, request.user))
+
+
+def park_preview_context(park, filters, user):
     params = filter_params(filters)
     params['park'] = str(park.pk)
     params['view'] = 'list'
     params['tab'] = 'events'
-    return render(request, 'events/includes/park_preview.html', {
+    return {
         'park': park, 'facilities': facility_labels(park), 'details_url': park_details_url(park),
         'events_url': reverse('event_list') + '?' + params.urlencode(),
-        'preview_events': matching_events(filters, request.user).filter(park=park)[:3],
-    })
+        'preview_events': matching_events(filters, user).filter(park=park).select_related('park', 'organizer')[:3],
+    }
 
 
 class EventCreateView(LoginRequiredMixin, CreateView):

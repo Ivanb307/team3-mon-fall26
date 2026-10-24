@@ -6,30 +6,27 @@
   const filtersForm = root.querySelector('.explore-filters');
   filtersForm.querySelector('[name="events_only"]').addEventListener('change', () => filtersForm.requestSubmit());
   const dialog = root.querySelector('[data-park-dialog]');
-  const previewContent = root.querySelector('[data-preview-content]');
-  let previewRequest;
-  async function preview(url) {
-    previewRequest?.abort();
-    previewRequest = new AbortController();
-    previewContent.textContent = 'Loading park…';
-    if (!dialog.open) dialog.showModal();
-    try {
-      const response = await fetch(url, {signal: previewRequest.signal, credentials: 'same-origin'});
-      if (!response.ok) throw new Error('Park unavailable');
-      // Only a same-origin, Django-autoescaped HTML partial is accepted here.
-      previewContent.innerHTML = await response.text();
-    } catch (error) {
-      if (error.name !== 'AbortError') previewContent.textContent = 'This park could not be loaded. Please close this panel and try again.';
+  // A selected park is ordinary URL state. Navigation persists it server-side,
+  // so sharing, refresh, no-JS and returning from another hub page agree.
+  function parkURL(id) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('page');
+    if (id) {
+      url.searchParams.set('park', id);
+      url.searchParams.set('panel', '1');
+    } else {
+      url.searchParams.delete('park');
+      url.searchParams.delete('panel');
     }
+    return url;
+  }
+  if (dialog.open) {
+    // Removing the server-rendered open attribute avoids queuing a close event.
+    dialog.removeAttribute('open');
+    dialog.showModal();
   }
   root.querySelector('[data-close-preview]').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => previewRequest?.abort());
-  root.addEventListener('click', (event) => {
-    const link = event.target.closest('[data-park-preview]');
-    if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    preview(link.href);
-  });
+  dialog.addEventListener('close', () => window.location.assign(parkURL(null)));
   if (root.dataset.view !== 'map') return;
   const shell = root.querySelector('[data-map-shell]');
   const container = root.querySelector('#explore-map');
@@ -79,9 +76,7 @@
         tooltip.textContent = `${park.name} · ${park.borough}`;
         marker.bindTooltip(tooltip);
         marker.on('click', () => {
-          const url = new URL(park.preview_url, window.location.origin);
-          url.search = new URL(container.dataset.mapUrl, window.location.origin).search;
-          preview(url);
+          window.location.assign(parkURL(park.id));
         });
         return marker;
       });

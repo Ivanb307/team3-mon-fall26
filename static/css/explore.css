@@ -53,3 +53,5 @@
 [hidden] { display:none !important; }
 @media(max-width:900px) { .explore-park-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .explore-heading { align-items:flex-start; gap:16px; } .explore-heading>.btn { font-size:.75rem; white-space:nowrap; } .explore-heading p { font-size:.8rem; } .explore-park-grid { grid-template-columns:1fr; } #explore-map { height:480px; } .explore-map-legend { font-size:.6rem; padding:8px; gap:5px; left:8px; } .explore-toolbar p { font-size:.7rem; } .explore-switch a { padding:6px 14px; } }
+
+.explore-preview:not(:modal) { position:relative; margin:24px auto; }

@@ -248,7 +248,7 @@ class EventDiscoveryFeedTests(TestCase):
         self.assertContains(response, 'Up to 12')
         self.assertContains(response, 'Unlimited spots')
 
-    def test_feed_excludes_past_events_by_default_and_can_include_them(self):
+    def test_feed_excludes_past_even_with_retired_include_past_parameter(self):
         self.make_event(days=-3, title='Old Soccer Game', activity=Activity.SOCCER)
         self.make_event(title='New Soccer Game', activity=Activity.SOCCER)
 
@@ -257,8 +257,8 @@ class EventDiscoveryFeedTests(TestCase):
         self.assertNotContains(default, 'Old Soccer Game')
 
         with_past = self.client.get(reverse('event_list'), {'include_past': '1'})
-        self.assertContains(with_past, 'Old Soccer Game')
-        self.assertContains(with_past, 'Event ended')
+        self.assertNotContains(with_past, 'Old Soccer Game')
+        self.assertNotContains(with_past, 'Include past events')
 
     def test_feed_shows_events_created_through_the_create_form(self):
         self.client.login(username='host@nyu.edu', password=PASSWORD)
@@ -277,7 +277,7 @@ class EventDiscoveryFeedTests(TestCase):
         self.assertContains(response, 'Ultimate frisbee')
         self.assertContains(response, 'Prospect Park')
 
-    def test_borough_skill_and_activity_filters_combine(self):
+    def test_borough_skill_and_sport_filters_combine(self):
         self.make_event(title='Brooklyn Beginner Soccer', activity=Activity.SOCCER, park=self.brooklyn_park,
                         skill_level=SkillLevel.BEGINNER)
         self.make_event(title='Brooklyn Competitive Soccer', activity=Activity.SOCCER, park=self.brooklyn_park,
@@ -287,7 +287,7 @@ class EventDiscoveryFeedTests(TestCase):
                         skill_level=SkillLevel.BEGINNER)
 
         response = self.client.get(reverse('event_list'), {
-            'borough': Borough.BROOKLYN, 'skill': SkillLevel.BEGINNER, 'activity': 'soccer',
+            'borough': Borough.BROOKLYN, 'skill': SkillLevel.BEGINNER, 'sport': 'soccer',
         })
 
         self.assertContains(response, 'Brooklyn Beginner Soccer')
@@ -373,8 +373,8 @@ class EventDiscoveryFeedTests(TestCase):
         default = self.client.get(reverse('event_list'))
         self.assertNotContains(default, 'Earlier Reservoir Run')
         with_past = self.client.get(reverse('event_list'), {'include_past': '1'})
-        self.assertContains(with_past, 'Earlier Reservoir Run')
-        self.assertContains(with_past, 'Event ended')
+        self.assertNotContains(with_past, 'Earlier Reservoir Run')
+        self.assertNotContains(with_past, 'Include past events')
 
 
 class FoundationSchemaTests(TestCase):

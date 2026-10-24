@@ -59,7 +59,7 @@
           </footer>
         </article>
       {% empty %}
-        <div class="explore-empty"><h2>No parks match your filters.</h2><p>Try a different area or clear a filter to explore more places.</p><a href="{% explore_url q=None borough=None zip=None sport=None facility=None park=None events_only=None %}">Clear filters</a></div>
+        <div class="explore-empty"><h2>No parks match your filters.</h2><p>Try a different area or clear a filter to explore more places.</p><a href="{% explore_url q=None borough=None zip=None sport=None facility=None when=None date_from=None date_to=None skill=None park=None panel=None events_only=None %}">Clear filters</a></div>
       {% endfor %}
       </div>
     {% else %}

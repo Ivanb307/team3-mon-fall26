@@ -142,7 +142,7 @@ Leaflet adapters to check cluster event sums, muted pins, pin/close navigation,
 unmapped notices, checkbox submission and data/tile/library failures. GitHub CI
 runs it with Node's built-in runner; there are no npm dependencies.
 
-Validation on 2026-10-24: 168 Django tests, 30 infrastructure safeguard tests and
+Validation on 2026-10-24: 169 Django tests, 30 infrastructure safeguard tests and
 5 Node interaction tests passed; migration drift, dependency consistency,
 Django checks, production compressed static manifest and whitespace checks
 passed. Edge verified default clustering, pin selection, event-detail round

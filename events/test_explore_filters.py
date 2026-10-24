@@ -201,4 +201,3 @@ class ExploreFilterTests(TestCase):
         self.assertEqual(parsed['view'],['map'])
         self.assertEqual(parsed['tab'],['events'])
         self.assertNotIn('page',parsed)
-

@@ -1,117 +1,99 @@
 {% extends "base.html" %}
-
-{% block title %}Upcoming events · NYC Active{% endblock %}
-
+{% load static explore_tags %}
+{% block title %}Explore Events · NYC Active{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/markercluster/MarkerCluster.css' %}">
+<link rel="stylesheet" href="{% static 'css/explore.css' %}">
+{% endblock %}
 {% block content %}
-<section class="discover">
-  <header class="discover-head">
-    <h1 class="discover-title">Upcoming events</h1>
-    <p class="discover-sub">Pickup games and park meetups across the five boroughs.</p>
+<section class="explore" aria-labelledby="explore-title" data-explore data-view="{{ filters.view }}">
+  <header class="explore-heading">
+    <div><p class="explore-eyebrow">GET OUT. FIND YOUR PEOPLE.</p>
+      <h1 id="explore-title">Explore events</h1>
+      <p>Find a game to join, or a new place to start one.</p></div>
+    <a class="btn btn--primary" href="{% url 'event_create' %}">+ Create event</a>
   </header>
-
-  <form class="discover-filters" method="get" action="{% url 'event_list' %}" role="search" aria-label="Filter events" data-autosubmit>
-    <div class="discover-field">
-      <label for="filter-borough">Borough</label>
-      <select id="filter-borough" name="borough">
-        <option value="">All boroughs</option>
-        {% for value, label in borough_choices %}
-          <option value="{{ value }}"{% if value == filters.borough %} selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="discover-field">
-      <label for="filter-activity">Activity</label>
-      <input id="filter-activity" type="search" name="activity" value="{{ filters.activity }}" placeholder="e.g., basketball" maxlength="100">
-    </div>
-    <div class="discover-field">
-      <label for="filter-skill">Skill level</label>
-      <select id="filter-skill" name="skill">
-        <option value="">Any skill level</option>
-        {% for value, label in skill_choices %}
-          <option value="{{ value }}"{% if value == filters.skill %} selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <label class="discover-check">
-      <input type="checkbox" name="include_past" value="1"{% if filters.include_past %} checked{% endif %}>
-      Include past events
-    </label>
-    <div class="discover-actions">
-      <button type="submit" class="btn btn--primary">Apply</button>
-      {% if any_filter %}<a class="discover-clear" href="{% url 'event_list' %}">Clear</a>{% endif %}
-    </div>
-  </form>
-
-  {% if events %}
-    <p class="discover-count">{{ paginator.count }} event{{ paginator.count|pluralize }}</p>
-    <ul class="discover-list">
-      {% for event in events %}
-        <li class="discover-item{% if event.is_past %} is-past{% endif %}">
-          <a class="discover-link" href="{{ event.get_absolute_url }}">
-            <span class="discover-date" aria-hidden="true">
-              <span class="discover-date-dow">{{ event.date|date:"D" }}</span>
-              <span class="discover-date-day">{{ event.date|date:"j" }}</span>
-              <span class="discover-date-mon">{{ event.date|date:"M" }}</span>
-            </span>
-
-            <span class="discover-body">
-              <span class="event-badges">
-                <span class="event-badge">{{ event.park.get_borough_display }}</span>
-                <span class="event-badge">{{ event.get_activity_display }}</span>
-                <span class="event-badge event-badge--outline">{{ event.get_skill_level_display }}</span>
-              </span>
-              <span class="discover-name">{{ event.display_title }}</span>
-              <span class="discover-meta">
-                <span>{{ event.date|date:"D, M j" }} · {{ event.time|time:"g:i A" }}</span>
-                <span>{{ event.park.name }}</span>
-              </span>
-            </span>
-
-            <span class="discover-capacity">
-              {% if event.is_past %}
-                <span class="discover-spots discover-spots--ended">Event ended</span>
-              {% elif event.is_unlimited %}
-                <span class="discover-spots">Unlimited spots</span>
-              {% else %}
-                <span class="discover-spots">Up to {{ event.capacity }}</span>
-                <span class="discover-spots-sub">participant{{ event.capacity|pluralize }}</span>
-              {% endif %}
-            </span>
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
-
-    {% if is_paginated %}
-      <nav class="discover-pages" aria-label="Pages">
-        {% if page_obj.has_previous %}
-          <a class="btn btn--ghost" href="{% querystring page=page_obj.previous_page_number %}">Previous</a>
-        {% endif %}
-        <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
-        {% if page_obj.has_next %}
-          <a class="btn btn--ghost" href="{% querystring page=page_obj.next_page_number %}">Next</a>
-        {% endif %}
-      </nav>
-    {% endif %}
-  {% else %}
-    <div class="discover-empty">
-      <p>No upcoming events{% if any_filter %} match these filters{% endif %} yet.</p>
-      {% if user.is_authenticated %}
-        <a class="btn btn--primary" href="{% url 'event_create' %}">Create the first one</a>
-      {% endif %}
-    </div>
+  {% include 'events/includes/explore_filters.html' %}
+  <div class="explore-toolbar">
+    <p><strong>{{ event_total }}</strong> upcoming event{{ event_total|pluralize }} <span aria-hidden="true">·</span>
+      <strong>{{ park_total }}</strong> park{{ park_total|pluralize }}</p>
+    <nav class="explore-switch" aria-label="Results view">
+      <a href="{% explore_url view='map' %}" {% if filters.view == 'map' %}aria-current="page"{% endif %}>Map</a>
+      <a href="{% explore_url view='list' %}" {% if filters.view == 'list' %}aria-current="page"{% endif %}>List</a>
+    </nav>
+  </div>
+  {% if filters.view == 'map' %}
+  <div class="explore-map-shell" data-map-shell hidden>
+    <div id="explore-map" role="region" aria-label="NYC parks and matching events" data-map-url="{{ map_url }}"></div>
+    <div class="explore-map-legend"><span class="legend-dot legend-dot--active"></span> Matching events
+      <span class="legend-dot"></span> Parks to explore</div>
+    <p class="explore-map-status" data-map-status role="status">Loading parks…</p>
+    <p class="explore-unmapped" data-unmapped hidden></p>
+  </div>
+  <div class="explore-map-error" data-map-error role="status" hidden>
+    <p>We couldn't load the map. You can still explore the list below.</p>
+    <button class="btn btn--ghost" type="button" data-map-retry>Try again</button>
+    <a class="btn btn--primary" href="{% explore_url view='list' %}">Switch to List</a>
+  </div>
+  <noscript><p class="explore-notice">The interactive map needs JavaScript. Showing List view instead.</p></noscript>
   {% endif %}
+  <div data-list-fallback>
+    <nav class="explore-tabs" aria-label="List results">
+      <a href="{% explore_url view='list' tab='events' %}" {% if filters.tab == 'events' %}aria-current="page"{% endif %}>Events <span>{{ event_total }}</span></a>
+      <a href="{% explore_url view='list' tab='parks' %}" {% if filters.tab == 'parks' %}aria-current="page"{% endif %}>Parks <span>{{ park_total }}</span></a>
+    </nav>
+    {% if filters.tab == 'parks' %}
+      <div class="explore-park-grid">
+      {% for park in parks %}
+        <article class="explore-park-card">
+          <p class="explore-card-kicker">{{ park.get_borough_display }} · {{ park.zipcode|default:'NYC' }}</p>
+          <h2>{{ park.name }}</h2>
+          <p class="explore-address">{{ park.address|default:park.location|default:'Address not specified' }}</p>
+          <p class="explore-amenities">{% for label in park.facility_labels|slice:':4' %}<span>{{ label }}</span>{% empty %}Facility details not specified{% endfor %}</p>
+          <p class="explore-rating">☆ Not yet rated</p>
+          <footer><span class="explore-event-count">{{ park.event_count }} matching event{{ park.event_count|pluralize }}</span>
+            <a class="explore-quick-view" href="{% url 'explore_park_preview' park.pk %}?{{ explore_params.urlencode }}" data-park-preview>Quick view <span aria-hidden="true">↗</span></a>
+            {% if park.details_url %}<a href="{{ park.details_url }}">Park details</a>{% endif %}
+          </footer>
+        </article>
+      {% empty %}
+        <div class="explore-empty"><h2>No parks match your filters.</h2><p>Try a different area or clear a filter to explore more places.</p><a href="{% explore_url q=None borough=None zip=None sport=None facility=None park=None events_only=None %}">Clear filters</a></div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <ul class="discover-list explore-event-list">
+      {% for event in events %}
+        <li class="discover-item"><a class="discover-link" href="{{ event.get_absolute_url }}">
+          <span class="discover-date" aria-hidden="true"><span class="discover-date-dow">{{ event.date|date:'D' }}</span><span class="discover-date-day">{{ event.date|date:'j' }}</span><span class="discover-date-mon">{{ event.date|date:'M' }}</span></span>
+          <span class="discover-body"><span class="event-badges"><span class="event-badge">{{ event.get_activity_display }}</span><span class="event-badge event-badge--outline">{{ event.get_skill_level_display }}</span>{% if event.status != 'scheduled' %}<span class="event-badge explore-status-badge">{{ event.get_status_display }}</span>{% endif %}</span>
+            <span class="discover-name">{{ event.display_title }}</span>
+            <span class="discover-meta"><span>{{ event.date|date:'D, M j' }} · {{ event.time|time:'g:i A' }}</span><span>{{ event.park.name }} · {{ event.park.get_borough_display }}</span></span>
+            {% if event.meeting_spot %}<span class="discover-meta">Meet at {{ event.meeting_spot }}</span>{% endif %}
+          </span>
+          <span class="discover-capacity"><span class="discover-spots">{% if event.is_unlimited %}Unlimited spots{% else %}Up to {{ event.capacity }}{% endif %}</span>{% if not event.is_unlimited %}<span class="discover-spots-sub">participant{{ event.capacity|pluralize }}</span>{% endif %}</span>
+        </a></li>
+      {% empty %}
+        <li class="explore-empty"><h2>No upcoming events match your filters.</h2><p>There are still places to play. Explore the parks or start a game.</p><a href="{% explore_url tab='parks' %}">Show parks instead</a> · <a href="{% url 'event_create' %}">Create event</a></li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+    {% if is_paginated %}
+    <nav class="discover-pages" aria-label="Pages">
+      {% if page_obj.has_previous %}<a class="btn btn--ghost" href="{% explore_url page=page_obj.previous_page_number %}">Previous</a>{% endif %}
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="btn btn--ghost" href="{% explore_url page=page_obj.next_page_number %}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+  </div>
+  <dialog class="explore-preview" data-park-dialog aria-label="Park quick view">
+    <button class="explore-preview-close" type="button" data-close-preview aria-label="Close park preview">×</button>
+    <div data-preview-content></div>
+  </dialog>
 </section>
 {% endblock %}
-
 {% block scripts %}
-<script>
-  // Re-run the search as soon as a dropdown or the checkbox changes.
-  // The activity text box still uses Enter or the Apply button.
-  document.querySelectorAll('form[data-autosubmit]').forEach((form) => {
-    form.querySelectorAll('select, input[type="checkbox"]').forEach((field) => {
-      field.addEventListener('change', () => form.requestSubmit());
-    });
-  });
-</script>
+<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+<script src="{% static 'vendor/markercluster/leaflet.markercluster.js' %}" defer></script>
+<script src="{% static 'js/explore.js' %}" defer></script>
 {% endblock %}

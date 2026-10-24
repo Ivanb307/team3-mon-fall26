@@ -30,7 +30,7 @@ class ZipCodes(forms.Field):
     widget = forms.SelectMultiple
 
     def clean(self, value):
-        return list(dict.fromkeys(item for item in (value or []) if re.fullmatch(r'\d{5}', item)))
+        return list(dict.fromkeys(item for item in (value or []) if re.fullmatch(r'[0-9]{5}', item)))
 
 
 class ExploreFilterForm(forms.Form):
@@ -56,6 +56,12 @@ class ExploreFilterForm(forms.Form):
 
     def clean_events_only(self):
         return self.data.get('events_only', '') in ('1', 'true', 'on')
+
+    def clean_park(self):
+        park = self.cleaned_data.get('park')
+        if park and not Park.objects.filter(pk=park, is_retired=False).exists():
+            return None
+        return park
 
     def clean(self):
         data = super().clean()
@@ -93,6 +99,36 @@ def filter_params(filters):
         elif value:
             params[name] = '1' if value is True else str(value)
     return params
+
+
+def configure_filter_form(form, filters):
+    """Basic controls; filter owners can replace widgets without changing URL state."""
+    zipcodes = {z.strip() for field in Park.objects.filter(is_retired=False).values_list('zipcode', flat=True)
+                for z in field.split(',') if re.fullmatch(r'[0-9]{5}', z.strip())}
+    zipcodes.update(filters['zip'])
+    form.fields['zip'].widget.choices = [(z, z) for z in sorted(zipcodes)]
+    if filters['scope'] != 'all':
+        form.data = form.data.copy()
+        form.data['events_only'] = '1'
+        form.fields['events_only'].widget.attrs['disabled'] = True
+
+
+def filter_pills(filters):
+    params = filter_params(filters)
+    pills = []
+    for name in ('q', 'borough', 'zip', 'sport', 'facility', 'when', 'date_from', 'date_to', 'skill', 'park'):
+        values = filters.get(name)
+        if not values:
+            continue
+        values = values if isinstance(values, list) else [values]
+        field = ExploreFilterForm.base_fields[name]
+        choices = dict(getattr(field, 'choices', []))
+        for value in values:
+            removal = params.copy()
+            removal.setlist(name, [item for item in params.getlist(name) if item != str(value)])
+            pills.append({'label': f'{field.label or name.title()}: {choices.get(value, value)}',
+                          'url': '?' + removal.urlencode()})
+    return pills
 
 
 def park_location_filters(parks, filters):

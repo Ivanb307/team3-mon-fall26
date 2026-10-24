@@ -1,5 +1,27 @@
 # Explore map and list integration (US-2.1 / US-2.2)
 
+## Updated sprint scope and split
+
+Yueli owns #16 (US-2.1), #17 (US-2.2), and the newly assigned #78 (US-2.8).
+
+1. Foundation #77 has been reviewed and approved; its author still needs to merge it.
+2. **PR #83** (`feature/explore-filter-base`) is the early shared-filter step of
+   #17. It is a draft until #77 merges. See `explore-filter-contract.md` for the
+   stable interface Rae's bundle 3 should extend. It does not close #17.
+3. This local branch now builds on #83 and retains the map, clustering, map/list
+   and Events/Parks presentation. The shared filter partial, stylesheet and query
+   helpers are reused directly, so the map follow-up won't replace Rae's widgets.
+4. **#78 remains to implement in the follow-up**: a shared Events hub header,
+   Explore/Create main toggle, Events navbar label, My Events account link, and
+   session restoration of the last results query (including view/tab/park state).
+   Include the hub partial on Explore, create and event detail; provide it for
+   the owner of #21 to include on park detail. Keep #22's title-field work with
+   bundle 5 rather than changing its form fields here.
+
+Merge order: #77, then #83, then the map/list/hub follow-up when reviewed. Rae
+can branch from updated develop after #83 merges. Do not close #18/#19/#20/#70
+or #21/#23/#79 as part of Yueli's map or hub work.
+
 This branch builds on PR #77's shared schema. It adds no models, migrations,
 credentials, paid map SDK or AWS resources. Review and merge #77 first; then
 sync this branch with develop before opening the feature PR.

@@ -12,7 +12,8 @@ from parks.models import Facility, Park
 
 from .forms import EventCreateForm
 from .models import Event
-from .explore import (displayed_parks, facility_labels, filter_params, matching_events, parse_filters)
+from .explore import (configure_filter_form, displayed_parks, facility_labels,
+                      filter_params, filter_pills, matching_events, parse_filters)
 
 
 def filter_events(params, user=None):
@@ -57,33 +58,14 @@ class EventListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         params = filter_params(self.filters)
-        zipcodes = {z.strip() for field in Park.objects.filter(is_retired=False).values_list('zipcode', flat=True)
-                    for z in field.split(',') if len(z.strip()) == 5}
-        zipcodes.update(self.filters['zip'])
-        self.filter_form.fields['zip'].widget.choices = [(z, z) for z in sorted(zipcodes)]
-        if self.filters['scope'] != 'all':
-            self.filter_form.data = self.filter_form.data.copy()
-            self.filter_form.data['events_only'] = '1'
-            self.filter_form.fields['events_only'].widget.attrs['disabled'] = True
-        pills = []
-        for name in ('q', 'borough', 'zip', 'sport', 'facility', 'when', 'date_from', 'date_to', 'skill', 'park'):
-            values = self.filters.get(name)
-            if not values:
-                continue
-            values = values if isinstance(values, list) else [values]
-            choices = dict(getattr(self.filter_form.fields[name], 'choices', []))
-            for value in values:
-                removal = params.copy()
-                removal.setlist(name, [item for item in params.getlist(name) if item != str(value)])
-                pills.append({'label': f'{self.filter_form.fields[name].label or name.title()}: '
-                              f'{choices.get(value, value)}', 'url': '?' + removal.urlencode()})
+        configure_filter_form(self.filter_form, self.filters)
         if self.filters['tab'] == 'parks':
             context['parks'] = context['object_list']
             context['events'] = []
             for park in context['parks']:
                 park.facility_labels = facility_labels(park)
                 park.details_url = park_details_url(park)
-        context.update(filters=self.filters, filter_form=self.filter_form, filter_pills=pills,
+        context.update(filters=self.filters, filter_form=self.filter_form, filter_pills=filter_pills(self.filters),
             explore_params=params, map_url=reverse('event_map_api') + '?' + params.urlencode(),
             event_total=matching_events(self.filters, self.request.user).count(),
             park_total=displayed_parks(self.filters, self.request.user).count())

@@ -66,6 +66,24 @@ count avoid multiplying events when a park has several matching facilities.
 - Keep presentation out of the query functions. Choose eager loading in each
   view so a map request does not load facilities or profiles it doesn't use.
 
+## Lookahead selector (US-2.3 / #18, reused by #19)
+
+Borough and zip codes sit in the main filter row and apply as soon as they change
+(`data-autosubmit`); the reload re-fits the map to the matching parks. Zip codes use
+`static/js/lookahead-select.js` + `static/css/lookahead-select.css`, a dependency-free
+progressive enhancement of any `<select multiple data-lookahead>`:
+
+- typing narrows options by label prefix or word prefix ("112" -> 11201, 11211; never 10112);
+- click or Enter adds a removable pill, `×` or Backspace removes one; arrows/Escape work;
+- the hidden `<select>` stays the source of truth, so the form still submits repeated
+  `?zip=` values and works unchanged without JavaScript.
+
+To reuse it for sports/facilities (#19), give the field a `forms.SelectMultiple` widget with
+`data-lookahead`, `data-autosubmit`, `data-placeholder` and `data-empty` attrs (see the `zip`
+field in `ExploreFilterForm`) and move it out of the "More filters" loop. Zip options come
+from `zip_code_choices()`: distinct five-digit zips of active parks.
+Tests: `events/test_location_filters.py`, `events/js/lookahead-select.test.cjs`.
+
 ## Remaining Yueli work
 
 - #17 presentation: Map/List toggle, Events/Parks list tabs and park cards.

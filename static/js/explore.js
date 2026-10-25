@@ -5,6 +5,9 @@
   if (!root) return;
   const filtersForm = root.querySelector('.explore-filters');
   filtersForm.querySelector('[name="events_only"]').addEventListener('change', () => filtersForm.requestSubmit());
+  // US-2.3: borough and zip-code picks apply immediately; the reload re-fits the map to the results.
+  filtersForm.querySelectorAll('[data-autosubmit]').forEach((field) =>
+    field.addEventListener('change', () => filtersForm.requestSubmit()));
   const dialog = root.querySelector('[data-park-dialog]');
   // A selected park is ordinary URL state. Navigation persists it server-side,
   // so sharing, refresh, no-JS and returning from another hub page agree.

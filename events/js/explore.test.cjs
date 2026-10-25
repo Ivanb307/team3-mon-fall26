@@ -21,6 +21,8 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   const checkbox = element();
   let submits = 0;
   nodes['.explore-filters'].querySelector = () => checkbox;
+  const autosubmitFields = [element(), element()];  // borough select, zip select (US-2.3)
+  nodes['.explore-filters'].querySelectorAll = (key) => key === '[data-autosubmit]' ? autosubmitFields : [];
   nodes['.explore-filters'].requestSubmit = () => submits++;
   const dialog = nodes['[data-park-dialog]'];
   dialog.open = selected;
@@ -59,7 +61,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
       return {ok: true, redirected: false, json: async () => data || {parks: [], unmapped_event_count: 0}};
     }});
   await new Promise(resolve => setImmediate(resolve));
-  return {nodes, markers, clusterOptions, fits, navigations, checkbox, dialog,
+  return {nodes, markers, clusterOptions, fits, navigations, checkbox, dialog, autosubmitFields,
     submits: () => submits, tileError};
 }
 
@@ -124,4 +126,12 @@ test('events-only checkbox submits the existing shared filter form', async () =>
   const ui = await controller();
   ui.checkbox.listeners.change();
   assert.equal(ui.submits(), 1);
+});
+
+test('borough and zip-code changes submit the shared filter form (US-2.3)', async () => {
+  const ui = await controller();
+  const [borough, zip] = ui.autosubmitFields;
+  borough.listeners.change();
+  zip.listeners.change();
+  assert.equal(ui.submits(), 2);
 });

@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
 <link rel="stylesheet" href="{% static 'vendor/markercluster/MarkerCluster.css' %}">
 <link rel="stylesheet" href="{% static 'css/explore-filters.css' %}">
+<link rel="stylesheet" href="{% static 'css/lookahead-select.css' %}">
 <link rel="stylesheet" href="{% static 'css/explore.css' %}">
 {% endblock %}
 {% block content %}
@@ -99,5 +100,6 @@
 {% block scripts %}
 <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
 <script src="{% static 'vendor/markercluster/leaflet.markercluster.js' %}" defer></script>
+<script src="{% static 'js/lookahead-select.js' %}" defer></script>
 <script src="{% static 'js/explore.js' %}" defer></script>
 {% endblock %}

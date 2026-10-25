@@ -447,7 +447,7 @@ class LandingLinksTests(TestCase):
         self.assertTemplateNotUsed(response, 'landing.html')
         self.assertContains(response, 'Welcome back, @parkfan')
         self.assertContains(response, 'Find a game near you or start your own.')
-        self.assertContains(response, f'<a class="btn btn--ghost" href="{reverse("event_list")}">Browse events</a>', html=True)
+        self.assertContains(response, f'<a class="btn btn--ghost" href="{reverse("event_list")}">Events</a>', html=True)
         self.assertNotContains(response, 'coming soon')
         create_link = f'class="btn btn--primary" href="{reverse("event_create")}">Create event</a>'
         self.assertContains(response, create_link, count=2)

@@ -15,13 +15,12 @@
   <div class="lp-container lp-nav-inner">
     <a class="brand" href="/">{% include "includes/logo.html" %}</a>
     <nav class="lp-nav-links" aria-label="Sections">
-      <a href="#events">Events</a>
+      <a href="{{ event_list_url|default:'#events' }}">Events</a>
       <a href="#features">Features</a>
       <a href="#testimonials">Testimonials</a>
       <a href="#faq">FAQ</a>
     </nav>
     <div class="lp-nav-actions">
-      {% if event_list_url %}<a class="lp-nav-login lp-nav-browse" href="{{ event_list_url }}">Browse events</a>{% endif %}
       {% if user.is_authenticated %}
         <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>
         <a class="btn btn--ghost" href="{% url 'public_profile' username=user.username %}">View profile</a>
@@ -239,7 +238,7 @@
       <nav class="lp-footer-cols" aria-label="Footer">
         <div>
           <h3>Explore</h3>
-          <a href="#events">Events</a>
+          <a href="{{ event_list_url|default:'#events' }}">Events</a>
           <a href="#features">Features</a>
           <a href="#testimonials">Testimonials</a>
           <a href="#faq">FAQ</a>

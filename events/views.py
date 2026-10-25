@@ -1,18 +1,24 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
+from django.db.models import Prefetch, Q
 from django.http import JsonResponse
-from django.urls import reverse
+from django.shortcuts import get_object_or_404, render
+from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DetailView, ListView
 
+from parks.models import Facility
+
 from .forms import EventCreateForm
+from .hub import remember_explore
 from .models import Event
-from .explore import (configure_filter_form, filter_params, filter_pills, matching_events, parse_filters)
+from .explore import (configure_filter_form, displayed_parks, facility_labels,
+                      filter_params, filter_pills, matching_events, parse_filters)
 
 
 def filter_events(params, user=None):
-    """Compatibility entry point for callers of #68's feed helper."""
+    """Compatibility entry point; every Explore surface uses the shared engine."""
     _, filters = parse_filters(params)
     return matching_events(filters, user).select_related('park', 'organizer'), filters
 
@@ -22,8 +28,16 @@ def personal_scope_redirect(request, filters):
         return redirect_to_login(request.get_full_path())
 
 
+def park_details_url(park):
+    # #21 supplies the full park page. Never render a broken link before it lands.
+    try:
+        return reverse('park_detail', kwargs={'pk': park.pk})
+    except NoReverseMatch:
+        return None
+
+
 class EventListView(ListView):
-    """Public discovery feed of upcoming events (#25)."""
+    """Explore Events: one filter state, a map and two paginated list tabs."""
 
     model = Event
     template_name = 'events/event_list.html'
@@ -36,15 +50,35 @@ class EventListView(ListView):
         return redirect or super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
-        return matching_events(self.filters, self.request.user).select_related('park', 'organizer')
+        if self.filters['tab'] == 'parks':
+            return displayed_parks(self.filters, self.request.user).prefetch_related(
+                Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active')))
+        return matching_events(self.filters, self.request.user).with_confirmed_players().select_related(
+            'park', 'organizer')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        params = filter_params(self.filters)
+        panel = bool(self.filters['park'] and self.request.GET.get('panel') == '1')
+        if panel:
+            params['panel'] = '1'
         configure_filter_form(self.filter_form, self.filters)
-        pills = filter_pills(self.filters)
-        context.update(filters=self.filters, filter_form=self.filter_form,
-                       filter_pills=pills, any_filter=bool(pills or self.filters['events_only']),
-                       explore_params=filter_params(self.filters))
+        if self.filters['tab'] == 'parks':
+            context['parks'] = context['object_list']
+            context['events'] = []
+            for park in context['parks']:
+                park.facility_labels = facility_labels(park)
+                park.details_url = park_details_url(park)
+        context.update(filters=self.filters, filter_form=self.filter_form, filter_pills=filter_pills(self.filters),
+            explore_params=params, map_url=reverse('event_map_api') + '?' + params.urlencode(),
+            event_total=matching_events(self.filters, self.request.user).count(),
+            park_total=displayed_parks(self.filters, self.request.user).count())
+        if panel:
+            selected = displayed_parks(self.filters, self.request.user).prefetch_related('facilities').first()
+            if selected:
+                context.update(park_preview_context(selected, self.filters, self.request.user))
+                context['selected_park'] = selected
+        remember_explore(self.request, self.filters, context['page_obj'].number, panel=panel)
         return context
 
 
@@ -83,6 +117,45 @@ def upcoming_events_api(request):
     events, _ = filter_events(request.GET, request.user)
     results = [serialize_event(event) for event in events[:200]]
     return JsonResponse({'count': len(results), 'results': results})
+
+
+@require_GET
+def event_map_api(request):
+    _, filters = parse_filters(request.GET)
+    redirect = personal_scope_redirect(request, filters)
+    if redirect:
+        return redirect
+    parks = displayed_parks(filters, request.user).exclude(latitude=None).exclude(longitude=None)
+    results = [{'id': p.pk, 'name': p.name, 'borough': p.get_borough_display(),
+                'lat': float(p.latitude), 'lng': float(p.longitude), 'event_count': p.event_count,
+                'preview_url': reverse('explore_park_preview', kwargs={'pk': p.pk})}
+               for p in parks]
+    unmapped = matching_events(filters, request.user).filter(
+        Q(park__latitude__isnull=True) | Q(park__longitude__isnull=True)).count()
+    return JsonResponse({'parks': results, 'unmapped_event_count': unmapped})
+
+
+@require_GET
+def explore_park_preview(request, pk):
+    """Small read-only preview; the full park panel/detail stories can reuse this engine."""
+    _, filters = parse_filters(request.GET)
+    redirect = personal_scope_redirect(request, filters)
+    if redirect:
+        return redirect
+    park = get_object_or_404(displayed_parks(filters, request.user).prefetch_related('facilities'), pk=pk)
+    return render(request, 'events/includes/park_preview.html', park_preview_context(park, filters, request.user))
+
+
+def park_preview_context(park, filters, user):
+    params = filter_params(filters)
+    params['park'] = str(park.pk)
+    params['view'] = 'list'
+    params['tab'] = 'events'
+    return {
+        'park': park, 'facilities': facility_labels(park), 'details_url': park_details_url(park),
+        'events_url': reverse('event_list') + '?' + params.urlencode(),
+        'preview_events': matching_events(filters, user).filter(park=park).select_related('park', 'organizer')[:3],
+    }
 
 
 class EventCreateView(LoginRequiredMixin, CreateView):

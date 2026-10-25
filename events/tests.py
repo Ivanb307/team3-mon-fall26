@@ -321,7 +321,7 @@ class EventDiscoveryFeedTests(TestCase):
             self.make_event(days=1 + i, title=f'Run {i:02d}')
         first = self.client.get(reverse('event_list'))
         self.assertEqual(len(first.context['events']), 20)
-        self.assertContains(first, '25 events')
+        self.assertEqual(first.context['event_total'], 25)
         second = self.client.get(reverse('event_list'), {'page': 2})
         self.assertEqual(len(second.context['events']), 5)
 

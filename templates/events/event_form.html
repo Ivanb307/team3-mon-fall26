@@ -1,8 +1,10 @@
 {% extends "base.html" %}
+{% load explore_tags %}
 
 {% block title %}Create an Event · NYC Active{% endblock %}
 
 {% block content %}
+{% include "events/_hub_header.html" with active="create" back=True %}
 <section class="event-card">
   <header class="event-card-header">
     <h1 class="event-card-title">Organize a Park Meetup</h1>
@@ -31,7 +33,7 @@
     {% include "includes/form_field.html" with field=form.description %}
 
     <div class="event-form-actions">
-      <a href="{% url 'home' %}" class="btn btn--ghost">Cancel</a>
+      <a href="{% last_explore_url %}" class="btn btn--ghost">Cancel</a>
       <button type="submit" class="btn btn--primary">Publish event</button>
     </div>
   </form>

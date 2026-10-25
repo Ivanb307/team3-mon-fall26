@@ -8,6 +8,15 @@
   // US-2.3: borough and zip-code picks apply immediately; the reload re-fits the map to the results.
   filtersForm.querySelectorAll('[data-autosubmit]').forEach((field) =>
     field.addEventListener('change', () => filtersForm.requestSubmit()));
+  // US-2.7: clearing the search box with its built-in × resets results. Enter already submits the
+  // form natively (and also fires 'search'), so skip that case to avoid a double submit.
+  const search = filtersForm.querySelector('input[name="q"]');
+  let searchByEnter = false;
+  search?.addEventListener('keydown', (event) => { searchByEnter = event.key === 'Enter'; });
+  search?.addEventListener('search', () => {
+    if (searchByEnter) { searchByEnter = false; return; }
+    if (!search.value.trim()) filtersForm.requestSubmit();
+  });
   const dialog = root.querySelector('[data-park-dialog]');
   // A selected park is ordinary URL state. Navigation persists it server-side,
   // so sharing, refresh, no-JS and returning from another hub page agree.

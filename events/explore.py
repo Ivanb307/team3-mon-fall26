@@ -34,8 +34,10 @@ class ZipCodes(forms.Field):
 
 
 class ExploreFilterForm(forms.Form):
-    q = forms.CharField(required=False, label='Search', widget=forms.SearchInput(
-        attrs={'placeholder': 'Park, address or event', 'maxlength': 100}))
+    # US-2.7: parks by name/address/cross-streets, events by title/description/meeting spot (trimmed, max 100).
+    q = forms.CharField(required=False, label='Search', widget=forms.SearchInput(attrs={
+        'placeholder': 'Park name, address or event (e.g. Astoria, Bedford Ave, 5v5)', 'maxlength': 100,
+        'autocomplete': 'off', 'enterkeyhint': 'search'}))
     # US-2.3: borough and zip apply as soon as they change (data-autosubmit); the zip list is a
     # lookahead pill selector (static/js/lookahead-select.js) that US-2.4 reuses for sports/facilities.
     borough = forms.ChoiceField(required=False, choices=[('', 'All boroughs'), *Borough.choices],

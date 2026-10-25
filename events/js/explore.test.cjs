@@ -174,3 +174,17 @@ test('without Leaflet, Try again reloads the page', async () => {
   assert.equal(ui.nodes['[data-map-error]'].hidden, false);
   assert.equal(typeof ui.nodes['[data-map-retry]'].listeners.click, 'function');
 });
+
+test('clearing the keyword search box resets results; typing alone does not submit (US-2.7)', async () => {
+  const ui = await controller();
+  const search = ui.checkbox;  // the fake form returns one node for every selector
+  search.value = 'astoria';
+  search.listeners.search();
+  assert.equal(ui.submits(), 0, 'a non-empty search waits for Enter or the Search button');
+  search.value = '  ';
+  search.listeners.search();
+  assert.equal(ui.submits(), 1, 'the × cleared it');
+  search.listeners.keydown({key: 'Enter'});
+  search.listeners.search();
+  assert.equal(ui.submits(), 1, 'Enter submits natively; no second submit');
+});

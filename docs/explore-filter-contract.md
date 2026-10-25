@@ -119,6 +119,17 @@ With zero pins the map shows the server-rendered overlay; on failure the error r
 map and the list stays usable. My Events empty states belong to #76.
 Tests: `events/test_empty_states.py`, `events/js/explore.test.cjs`.
 
+## Keyword search (US-2.7 / #70)
+
+One search bar sits on its own row above the other filters (`?q=`, trimmed, max 100 characters,
+case-insensitive). Parks match on `name`, `address` or `location` (cross-streets), and every
+event at a matching park counts. Events also match on their own `title`, `description` or
+`meeting_spot`, and an event hit brings its park onto the map and Parks tab even when the park's
+own text doesn't match. The keyword is AND'd with every other filter. Enter or the Search button
+applies it; the box's built-in × clears it and resets results; the "Search: …" pill and Clear
+filters remove it. No matches fall through to the US-2.5 empty states.
+Tests: `events/test_keyword_search.py`.
+
 ## Remaining Yueli work
 
 - #17 presentation: Map/List toggle, Events/Parks list tabs and park cards.

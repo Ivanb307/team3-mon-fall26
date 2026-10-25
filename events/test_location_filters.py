@@ -173,3 +173,15 @@ class BoroughAndZipFilterTests(TestCase):
         # Zip sits in the main row next to borough, not hidden under "More filters".
         main_row = html.split('class="explore-filter-options"')[0]
         self.assertIn('name="zip"', main_row)
+
+    def test_explore_has_no_free_text_search_box_but_keeps_a_linked_q_until_removed(self):
+        html = self.client.get(reverse('event_list')).content.decode()
+        self.assertNotIn('Find your next game', html)
+        self.assertNotRegex(html, r'<input[^>]*name="q"')
+
+        page = self.client.get(reverse('event_list'), {'q': 'ladder', 'zip': '11211'})
+        html = page.content.decode()
+        self.assertRegex(html, r'<input type="hidden" name="q" value="ladder">')
+        self.assertNotRegex(html, r'<input type="search"[^>]*name="q"')
+        pill = next(p['url'] for p in page.context['filter_pills'] if p['label'] == 'Search: ladder')
+        self.assertNotIn('q', parse_qs(urlsplit(pill).query))

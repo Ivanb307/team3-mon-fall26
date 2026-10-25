@@ -13,11 +13,13 @@ function element() {
     replaceChildren() { this.children = []; }};
 }
 
-async function controller({data, reject = false, leaflet = true, selected = false} = {}) {
+async function controller({data, reject = false, leaflet = true, selected = false, mapEmpty = false} = {}) {
   const nodes = {};
+  const state = {reject, clears: 0};
   for (const key of ['.explore-filters', '[data-park-dialog]', '[data-close-preview]',
     '[data-map-shell]', '#explore-map', '[data-list-fallback]', '[data-map-error]',
     '[data-map-status]', '[data-unmapped]', '[data-map-retry]']) nodes[key] = element();
+  if (mapEmpty) nodes['[data-map-empty]'] = element();  // server-rendered US-2.5 empty state
   const checkbox = element();
   let submits = 0;
   nodes['.explore-filters'].querySelector = () => checkbox;
@@ -37,7 +39,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   let fits = 0;
   let tileError;
   const map = {setView() {return this;}, fitBounds() {fits++;}, eachLayer() {}};
-  const group = {addTo() {return this;}, clearLayers() {}, addLayers() {}, getBounds() {return {};}};
+  const group = {addTo() {return this;}, clearLayers() {state.clears++;}, addLayers() {}, getBounds() {return {};}};
   const L = {
     map: () => map,
     tileLayer: () => ({on(name, handler) {tileError = handler; return this;}, addTo() {return this;}}),
@@ -57,12 +59,12 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   vm.runInNewContext(source, {window, L, URL, AbortController,
     document: {querySelector: () => root, createElement: element, createTextNode: text => ({textContent: text})},
     fetch: async () => {
-      if (reject) throw new Error('Offline');
+      if (state.reject) throw new Error('Offline');
       return {ok: true, redirected: false, json: async () => data || {parks: [], unmapped_event_count: 0}};
     }});
   await new Promise(resolve => setImmediate(resolve));
   return {nodes, markers, clusterOptions, fits, navigations, checkbox, dialog, autosubmitFields,
-    submits: () => submits, tileError};
+    submits: () => submits, tileError, state, fitCount: () => fits};
 }
 
 const parks = [
@@ -134,4 +136,41 @@ test('borough and zip-code changes submit the shared filter form (US-2.3)', asyn
   borough.listeners.change();
   zip.listeners.change();
   assert.equal(ui.submits(), 2);
+});
+
+// US-2.5 (#20): empty and error states around the map.
+test('no matching parks clears pins and leaves the server-rendered empty state in charge', async () => {
+  const ui = await controller({data: {parks: [], unmapped_event_count: 0}, mapEmpty: true});
+  assert.ok(ui.state.clears >= 1, 'previous pins are cleared');
+  assert.equal(ui.fitCount(), 0);
+  assert.equal(ui.nodes['[data-map-status]'].hidden, true, 'no generic status on top of the empty state');
+  assert.equal(ui.nodes['[data-map-empty]'].hidden, false);
+  assert.equal(ui.nodes['[data-map-error]'].hidden, true);
+});
+
+test('parks that match but have no coordinates get a location notice instead of an empty state', async () => {
+  const ui = await controller({data: {parks: [], unmapped_event_count: 2}});
+  assert.equal(ui.nodes['[data-map-status]'].hidden, false);
+  assert.equal(ui.nodes['[data-map-status]'].textContent, 'None of the matching parks have a map location yet.');
+  assert.equal(ui.nodes['[data-unmapped]'].hidden, false);
+});
+
+test('a failed map request shows the error with a working Try again', async () => {
+  const ui = await controller({data: {parks, unmapped_event_count: 0}, reject: true});
+  assert.equal(ui.nodes['[data-map-error]'].hidden, false);
+  assert.equal(ui.nodes['[data-list-fallback]'].hidden, false, 'List view still works');
+  assert.equal(ui.nodes['[data-map-shell]'].hidden, true, 'the error replaces the blank map');
+  ui.state.reject = false;
+  ui.nodes['[data-map-retry]'].listeners.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ui.nodes['[data-map-error]'].hidden, true);
+  assert.equal(ui.nodes['[data-map-shell]'].hidden, false);
+  assert.equal(ui.markers.length, 3);
+  assert.equal(ui.fitCount(), 1);
+});
+
+test('without Leaflet, Try again reloads the page', async () => {
+  const ui = await controller({leaflet: false});
+  assert.equal(ui.nodes['[data-map-error]'].hidden, false);
+  assert.equal(typeof ui.nodes['[data-map-retry]'].listeners.click, 'function');
 });

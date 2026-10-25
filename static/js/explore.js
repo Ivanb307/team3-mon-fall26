@@ -36,8 +36,11 @@
   const fallback = root.querySelector('[data-list-fallback]');
   const errorBox = root.querySelector('[data-map-error]');
   const status = root.querySelector('[data-map-status]');
-  function fail() { errorBox.hidden = false; fallback.hidden = false; status.hidden = true; }
-  if (!window.L || !L.markerClusterGroup) { fail(); return; }
+  // US-2.5: the error replaces the (blank) map so it's the first thing seen; the list stays usable.
+  function fail() { errorBox.hidden = false; fallback.hidden = false; status.hidden = true; shell.hidden = true; }
+  // Without Leaflet there is no map to retry in place, so Try again reloads the page.
+  function failHard() { fail(); root.querySelector('[data-map-retry]').addEventListener('click', () => window.location.reload()); }
+  if (!window.L || !L.markerClusterGroup) { failHard(); return; }
   shell.hidden = false;
   let map;
   let group;
@@ -57,7 +60,7 @@
       iconCreateFunction: (cluster) => icon(cluster.getAllChildMarkers().reduce(
         (sum, marker) => sum + marker.options.eventCount, 0), true)
     }).addTo(map);
-  } catch (_) { fail(); return; }
+  } catch (_) { failHard(); return; }
   let mapRequest;
   async function load() {
     mapRequest?.abort();
@@ -85,8 +88,11 @@
       });
       group.addLayers(markers);
       if (markers.length) map.fitBounds(group.getBounds(), {padding:[36,36], maxZoom:15});
-      status.hidden = markers.length > 0;
-      if (!markers.length) status.textContent = 'No parks match your filters. Try broadening your search.';
+      // US-2.5: zero pins shows the server-rendered empty state (pins already cleared above).
+      // Parks may still match but lack coordinates; the unmapped notice below links to List view.
+      const emptyState = root.querySelector('[data-map-empty]');
+      status.hidden = markers.length > 0 || Boolean(emptyState);
+      if (!markers.length && !emptyState) status.textContent = 'None of the matching parks have a map location yet.';
       const unmapped = root.querySelector('[data-unmapped]');
       unmapped.hidden = !data.unmapped_event_count;
       unmapped.replaceChildren();
@@ -104,7 +110,7 @@
       if (errorBox.hidden) fallback.hidden = true;
     } catch (error) { if (error.name !== 'AbortError') fail(); }
   }
-  root.querySelector('[data-map-retry]').addEventListener('click', () => { map.eachLayer(layer => {
+  root.querySelector('[data-map-retry]').addEventListener('click', () => { shell.hidden = false; map.invalidateSize?.(); map.eachLayer(layer => {
     if (layer instanceof L.TileLayer) layer.redraw();
   }); load(); });
   load();

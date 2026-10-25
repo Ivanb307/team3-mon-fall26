@@ -231,11 +231,11 @@ class ExploreTests(TestCase):
     def test_empty_parks_clear_link_removes_date_and_skill_filters_too(self):
         self.client.force_login(self.host)
         response = self.client.get('/events/?view=list&tab=parks&scope=mine&q=missing&skill=beginner&date_from=2030-01-01')
-        self.assertContains(response, 'No parks match your filters.')
+        self.assertContains(response, 'No parks or events match your filters.')
         links = [unescape(href) for href in re.findall(r'href="([^"]+)"', response.content.decode())]
         clear_urls = [url for url in links if url.startswith('?') and 'q=' not in url
                       and 'skill=' not in url and 'date_from=' not in url and 'scope=mine' in url]
         self.assertTrue(clear_urls)
-        empty = response.content.decode().split('No parks match your filters.')[1]
+        empty = response.content.decode().split('No parks or events match your filters.')[1]
         clear = unescape(re.search(r'href="([^"]+)"', empty).group(1))
         self.assertEqual(parse_qs(urlsplit(clear).query), {'scope': ['mine'], 'view': ['list'], 'tab': ['parks']})

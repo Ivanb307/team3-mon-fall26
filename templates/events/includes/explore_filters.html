@@ -8,18 +8,19 @@
   <div class="explore-filter-row">
     <div><label for="{{ filter_form.borough.id_for_label }}">Borough</label>{{ filter_form.borough }}</div>
     <div class="explore-zip"><label for="{{ filter_form.zip.id_for_label }}">Zip codes</label>{{ filter_form.zip }}</div>
+    <div class="explore-sport"><label for="{{ filter_form.sport.id_for_label }}">Sport</label>{{ filter_form.sport }}</div>
     <div><label for="{{ filter_form.scope.id_for_label }}">Show</label>{{ filter_form.scope }}</div>
     <button class="btn btn--primary" type="submit">Search</button>
   </div>
   <div class="explore-filter-options">
-    <details class="explore-more-filters" {% if filter_form.errors %}open{% endif %}>
+    <details class="explore-more-filters" {% if filter_form.errors or filters.facility %}open{% endif %}>
       <summary>More filters <span aria-hidden="true">＋</span></summary>
       <div class="explore-filter-grid">
-        {% for field in filter_form %}{% if field.name == 'sport' or field.name == 'facility' or field.name == 'when' or field.name == 'date_from' or field.name == 'date_to' or field.name == 'skill' %}
+        {% for field in filter_form %}{% if field.name == 'facility' or field.name == 'when' or field.name == 'date_from' or field.name == 'date_to' or field.name == 'skill' %}
         <div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>
         {% endif %}{% endfor %}
       </div>
-      <p class="explore-filter-help">Choose multiple sports or facilities with Ctrl (Windows) or Command (Mac).</p>
+      <p class="explore-filter-help">Facilities narrow parks to those with every selected facility.</p>
     </details>
     <label class="explore-events-only">{{ filter_form.events_only }} Only parks with events</label>
   </div>

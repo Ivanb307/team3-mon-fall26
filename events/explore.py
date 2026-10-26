@@ -43,8 +43,13 @@ class ExploreFilterForm(forms.Form):
     zip = ZipCodes(required=False, label='Zip codes', widget=forms.SelectMultiple(attrs={
         'data-lookahead': '', 'data-autosubmit': '', 'data-placeholder': 'Type a zip code',
         'data-empty': 'No matching NYC zip codes', 'data-inputmode': 'numeric'}))
-    sport = ValidChoices(required=False, choices=Activity.choices, label='Sports')
-    facility = ValidChoices(required=False, choices=Facility.SPORT_FIELDS, label='Facilities')
+    # US-2.4: sports (OR) and exact facilities (AND) reuse the US-2.3 lookahead widget.
+    sport = ValidChoices(required=False, choices=Activity.choices, label='Sport', widget=forms.SelectMultiple(attrs={
+        'data-lookahead': '', 'data-autosubmit': '', 'data-placeholder': 'Type a sport',
+        'data-empty': 'No matching sports'}))
+    facility = ValidChoices(required=False, choices=Facility.SPORT_FIELDS, label='Facilities',
+        widget=forms.SelectMultiple(attrs={'data-lookahead': '', 'data-autosubmit': '',
+            'data-placeholder': 'Type a facility, e.g. tennis', 'data-empty': 'No matching facilities'}))
     when = forms.ChoiceField(required=False, choices=[('', 'Any date'), ('today', 'Today')], label='Date')
     date_from = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label='From')
     date_to = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label='To')
@@ -200,6 +205,10 @@ def displayed_parks(filters, user=None):
     if filters.get('q'):
         q = filters['q']
         parks = parks.filter(Q(name__icontains=q) | Q(address__icontains=q) | Q(location__icontains=q))
+    # US-2.4: sports are OR'd. A park can host a selected sport if it has an active facility for it,
+    # and any park can host a sport no facility type represents (e.g. Running). So the facility
+    # narrowing applies only when every selected sport is facility-backed; a mixed pick such as
+    # Basketball + Running therefore keeps all parks (their events still have to match a sport).
     sports = filters.get('sport', [])
     if sports and all(sport in ACTIVITY_FACILITY_KEYS for sport in sports):
         keys = {key for sport in sports for key in ACTIVITY_FACILITY_KEYS[sport]}

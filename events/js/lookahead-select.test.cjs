@@ -48,7 +48,11 @@ function setup(values, selected = []) {
   select.id = 'id_zip';
   select.multiple = true;
   select.dataset = {lookahead: '', placeholder: 'Type a zip code', empty: 'No matching NYC zip codes'};
-  select.options = values.map((v) => ({value: v, label: v, selected: selected.includes(v)}));
+  // Values are plain strings (zip codes) or [value, label] pairs (sports, facilities).
+  select.options = values.map((v) => {
+    const [value, label] = Array.isArray(v) ? v : [v, v];
+    return {value, label, selected: selected.includes(value)};
+  });
   form.append(label, select);
   const changes = [];
   select.addEventListener('change', () => changes.push(select.options.filter((o) => o.selected).map((o) => o.value)));
@@ -153,4 +157,43 @@ test('no matches shows the empty message; the select is hidden and the label poi
 test('enhancing twice is a no-op', () => {
   const {api, select} = setup(ZIPS);
   assert.equal(api.enhance(select), undefined);
+});
+
+// US-2.4 (#19): the same widget drives the Sport and Facilities dropdowns.
+const SPORTS = [['basketball', 'Basketball'], ['soccer', 'Soccer'], ['running', 'Running'],
+  ['pickleball', 'Pickleball'], ['ultimate_frisbee', 'Ultimate frisbee']];
+const FACILITIES = [['tennis', 'Tennis'], ['regulation_soccer', 'Regulation Soccer'],
+  ['nonregulation_soccer', 'Non-Regulation Soccer'], ['track_and_field', 'Track & Field']];
+
+test('typing "bask" and selecting Basketball adds a Basketball pill and submits the sport value', () => {
+  const {ui, changes} = setup(SPORTS);
+  ui.input.value = 'bask';
+  ui.input.fire('input');
+  assert.deepEqual(optionTexts(ui.list), ['Basketball'], '"bask" must not match Pickleball');
+  ui.input.fire('keydown', {key: 'Enter'});
+  assert.deepEqual(changes, [['basketball']]);
+  assert.equal(ui.pills.children[0].textContent, 'Basketball');
+  assert.equal(ui.pills.children[0].dataset.value, 'basketball');
+});
+
+test('sports accumulate for OR and match on any word of the label', () => {
+  const {ui, changes} = setup(SPORTS, ['basketball']);
+  ui.input.value = 'fris';
+  ui.input.fire('input');
+  assert.deepEqual(optionTexts(ui.list), ['Ultimate frisbee']);
+  ui.input.fire('keydown', {key: 'Enter'});
+  assert.deepEqual(changes, [['basketball', 'ultimate_frisbee']]);
+});
+
+test('facility lookahead finds Track & Field and both soccer field types by word', () => {
+  const {ui} = setup(FACILITIES);
+  ui.input.value = 'track';
+  ui.input.fire('input');
+  assert.deepEqual(optionTexts(ui.list), ['Track & Field']);
+  ui.input.value = 'regulation';
+  ui.input.fire('input');
+  assert.deepEqual(optionTexts(ui.list), ['Regulation Soccer', 'Non-Regulation Soccer']);
+  ui.input.value = 'non';
+  ui.input.fire('input');
+  assert.deepEqual(optionTexts(ui.list), ['Non-Regulation Soccer']);
 });

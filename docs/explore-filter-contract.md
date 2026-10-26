@@ -84,6 +84,21 @@ field in `ExploreFilterForm`) and move it out of the "More filters" loop. Zip op
 from `zip_code_choices()`: distinct five-digit zips of active parks.
 Tests: `events/test_location_filters.py`, `events/js/lookahead-select.test.cjs`.
 
+## Sport and facility filters (US-2.4 / #19)
+
+Sport sits in the main row and Facilities under "More filters"; both use the same lookahead
+widget and apply on change. "More filters" stays open while a facility is selected.
+
+- `?sport=` (repeated, OR): events match on `activity`. A park is shown if it has an *active*
+  facility for any selected sport (`ACTIVITY_FACILITY_KEYS`) or hosts a matching event. A sport
+  with no facility type (e.g. Running) can be played at any park, so it does not narrow parks;
+  a mixed pick such as Basketball + Running therefore keeps every park (OR).
+- `?facility=` (repeated, AND): parks must have every selected active facility, matched as exact
+  comma-separated tokens (`regulation_soccer` never matches `nonregulation_soccer`). Every event
+  at those parks counts, whatever its sport; combine with `?sport=` to narrow events too.
+- One EXISTS per facility key keeps parks and events unduplicated when a park has several courts.
+Tests: `events/test_sport_facility_filters.py`, `events/js/lookahead-select.test.cjs`.
+
 ## Remaining Yueli work
 
 - #17 presentation: Map/List toggle, Events/Parks list tabs and park cards.

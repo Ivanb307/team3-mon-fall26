@@ -99,6 +99,37 @@ widget and apply on change. "More filters" stays open while a facility is select
 - One EXISTS per facility key keeps parks and events unduplicated when a park has several courts.
 Tests: `events/test_sport_facility_filters.py`, `events/js/lookahead-select.test.cjs`.
 
+## Empty and error states (US-2.5 / #20)
+
+`templates/events/includes/empty_state.html` renders every Explore empty/error message from one
+`state` variable; `EventListView` picks it with `explore_empty_state()` (`empty_state` for the
+list, `map_empty_state` for the map overlay):
+
+| State | When | Actions |
+|---|---|---|
+| `no_events` | Events tab, no matching events | Clear filters, Show parks instead, Create Event |
+| `no_matches` | Parks tab or map, no parks and no events | Clear filters |
+| `events_only_empty` | "Only parks with events" on (All events scope), no events | Turn it off, Clear filters |
+| `no_park_data` | No active parks at all (sync not run) - replaces map and lists | Try again |
+| `map_error` | Map data request, tiles or Leaflet fail (client-side) | Try again, Switch to List |
+
+Clear filters removes every filter but keeps view, tab and the Show scope. Personal scopes
+force "Only parks with events", so they get `no_matches` instead of `events_only_empty`.
+With zero pins the map shows the server-rendered overlay; on failure the error replaces the
+map and the list stays usable. My Events empty states belong to #76.
+Tests: `events/test_empty_states.py`, `events/js/explore.test.cjs`.
+
+## Keyword search (US-2.7 / #70)
+
+One search bar sits on its own row above the other filters (`?q=`, trimmed, max 100 characters,
+case-insensitive). Parks match on `name`, `address` or `location` (cross-streets), and every
+event at a matching park counts. Events also match on their own `title`, `description` or
+`meeting_spot`, and an event hit brings its park onto the map and Parks tab even when the park's
+own text doesn't match. The keyword is AND'd with every other filter. Enter or the Search button
+applies it; the box's built-in × clears it and resets results; the "Search: …" pill and Clear
+filters remove it. No matches fall through to the US-2.5 empty states.
+Tests: `events/test_keyword_search.py`.
+
 ## Remaining Yueli work
 
 - #17 presentation: Map/List toggle, Events/Parks list tabs and park cards.

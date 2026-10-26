@@ -1,5 +1,6 @@
 .explore-filters { border:1px solid var(--border); border-radius:14px; background:#fff; padding:20px; box-shadow:0 2px 5px #10182804; }
-.explore-filter-row { display:grid; grid-template-columns:1fr 1.3fr 1.3fr 1fr auto; gap:14px; align-items:end; }
+.explore-search-row { display:grid; grid-template-columns:1fr auto; gap:14px; align-items:end; margin-bottom:14px; }
+.explore-filter-row { display:grid; grid-template-columns:1fr 1.3fr 1.3fr 1fr; gap:14px; align-items:end; }
 .explore-filters label { display:block; font-size:.75rem; font-weight:600; color:var(--ink-2); margin-bottom:6px; }
 .explore-filters input:not([type=checkbox]), .explore-filters select { width:100%; min-height:42px; padding:9px 11px; font:inherit; font-size:.875rem; border:1px solid var(--border); border-radius:8px; background:#fff; color:var(--ink); }
 .explore-filters input:focus-visible,.explore-filters select:focus-visible { outline:2px solid var(--green-600); outline-offset:2px; }
@@ -17,5 +18,5 @@
 .explore-pill span { margin-left:6px; }
 .explore-clear { font-size:.75rem; align-self:center; margin-left:6px; }
 
-@media(max-width:900px) { .explore-filter-row { grid-template-columns:1fr 1fr; } .explore-filter-row>.btn { grid-column:1/-1; } }
-@media(max-width:600px) { .explore-filters { padding:14px; } .explore-filter-row { grid-template-columns:1fr 1fr; gap:12px; } .explore-zip, .explore-sport { grid-column:1/-1; } .explore-filter-row>.btn { grid-column:1/-1; } .explore-filter-grid { grid-template-columns:1fr; } .explore-filter-options { display:block; } .explore-events-only { margin-top:14px !important; } }
+@media(max-width:900px) { .explore-filter-row { grid-template-columns:1fr 1fr; } }
+@media(max-width:600px) { .explore-filters { padding:14px; } .explore-filter-row { grid-template-columns:1fr; gap:12px; } .explore-search-row { grid-template-columns:1fr; } .explore-search-row>.btn { width:100%; } .explore-filter-grid { grid-template-columns:1fr; } .explore-filter-options { display:block; } .explore-events-only { margin-top:14px !important; } }

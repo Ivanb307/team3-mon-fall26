@@ -8,7 +8,7 @@ from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DetailView, ListView
 
-from parks.models import Facility
+from parks.models import Facility, Park
 
 from .forms import EventCreateForm
 from .hub import remember_explore
@@ -26,6 +26,34 @@ def filter_events(params, user=None):
 def personal_scope_redirect(request, filters):
     if filters['scope'] != 'all' and not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
+
+
+CLEARABLE_FILTERS = ('q', 'borough', 'zip', 'sport', 'facility', 'when', 'date_from', 'date_to', 'skill',
+                     'park', 'events_only')
+
+
+def clear_filters_url(filters):
+    """Explore URL with every filter removed; keeps view, tab and the Show scope (US-2.5)."""
+    params = filter_params(filters)
+    for name in CLEARABLE_FILTERS:
+        params.pop(name, None)
+    return '?' + params.urlencode()
+
+
+def explore_empty_state(filters, event_total, park_total, has_park_data):
+    """Which shared empty-state variant (includes/empty_state.html) the results area shows (US-2.5).
+
+    Returns (list_state, map_state); either is None when there are results to show.
+    """
+    if not has_park_data:
+        return 'no_park_data', 'no_park_data'
+    # "Only parks with events" can only be switched off on the All events scope.
+    no_parks = ('events_only_empty' if filters['events_only'] and filters['scope'] == 'all' and not event_total
+                else 'no_matches')
+    map_state = no_parks if not park_total else None
+    if filters['tab'] == 'parks':
+        return (no_parks if not park_total else None), map_state
+    return ('no_events' if not event_total else None), map_state
 
 
 def park_details_url(park):
@@ -73,6 +101,11 @@ class EventListView(ListView):
             explore_params=params, map_url=reverse('event_map_api') + '?' + params.urlencode(),
             event_total=matching_events(self.filters, self.request.user).count(),
             park_total=displayed_parks(self.filters, self.request.user).count())
+        has_park_data = Park.objects.filter(is_retired=False).exists()
+        list_state, map_state = explore_empty_state(
+            self.filters, context['event_total'], context['park_total'], has_park_data)
+        context.update(has_park_data=has_park_data, empty_state=list_state, map_empty_state=map_state,
+                       clear_filters_url=clear_filters_url(self.filters))
         if panel:
             selected = displayed_parks(self.filters, self.request.user).prefetch_related('facilities').first()
             if selected:

@@ -55,3 +55,15 @@
 @media(max-width:600px) { .explore-heading { align-items:flex-start; gap:16px; } .explore-heading>.btn { font-size:.75rem; white-space:nowrap; } .explore-heading p { font-size:.8rem; } .explore-park-grid { grid-template-columns:1fr; } #explore-map { height:480px; } .explore-map-legend { font-size:.6rem; padding:8px; gap:5px; left:8px; } .explore-toolbar p { font-size:.7rem; } .explore-switch a { padding:6px 14px; } }
 
 .explore-preview:not(:modal) { position:relative; margin:24px auto; }
+
+/* US-2.5 (#20): shared empty/error states (templates/events/includes/empty_state.html). */
+.explore-empty h2 { margin:0 0 8px; line-height:1.35; }
+.explore-empty p { margin:0 0 4px; }
+.explore-empty-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:18px !important; }
+.explore-empty--no_park_data { margin-top:18px; }
+.explore-empty--map { position:absolute; z-index:500; top:50%; left:50%; transform:translate(-50%,-50%); width:min(440px, calc(100% - 32px)); padding:24px 20px; border-style:solid; box-shadow:0 8px 24px #1018281f; }
+.explore-empty--map h2 { font-size:1rem; }
+.explore-empty.explore-map-error { padding:20px; text-align:left; background:#fff9e9; border:1px solid #e9d7aa; color:var(--ink-2); }
+.explore-map-error .explore-empty-actions { justify-content:flex-start; margin-top:12px !important; }
+.explore-map-error h2 { font-size:1rem; color:var(--ink); }
+@media(max-width:600px) { .explore-empty { padding:36px 16px; } .explore-empty-actions .btn { flex:1 1 100%; } }

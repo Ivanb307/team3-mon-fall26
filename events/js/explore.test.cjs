@@ -13,9 +13,10 @@ function element() {
     replaceChildren() { this.children = []; }};
 }
 
-async function controller({data, reject = false, leaflet = true, selected = false, mapEmpty = false} = {}) {
+async function controller({data, reject = false, leaflet = true, selected = false, mapEmpty = false,
+  noParkData = false} = {}) {
   const nodes = {};
-  const state = {reject, clears: 0};
+  const state = {reject, clears: 0, fetches: 0, maps: 0};
   for (const key of ['.explore-filters', '[data-park-dialog]', '[data-close-preview]',
     '[data-map-shell]', '#explore-map', '[data-list-fallback]', '[data-map-error]',
     '[data-map-status]', '[data-unmapped]', '[data-map-retry]']) nodes[key] = element();
@@ -32,7 +33,13 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   dialog.showModal = () => { dialog.open = true; };
   dialog.removeAttribute = () => { dialog.open = false; };
   nodes['#explore-map'].dataset = {mapUrl: '/events/api/map/?zip=11211&zip=11222'};
-  const root = {dataset: {view: 'map'}, querySelector: key => nodes[key]};
+  if (noParkData) {
+    // US-2.5 no_park_data: the template replaces the map shell, error box and list with one message.
+    for (const key of ['[data-map-shell]', '#explore-map', '[data-list-fallback]', '[data-map-error]',
+      '[data-map-status]', '[data-unmapped]', '[data-map-retry]']) delete nodes[key];
+  }
+  // Like the real DOM, a missing element is null.
+  const root = {dataset: {view: 'map'}, querySelector: key => nodes[key] ?? null};
   const navigations = [];
   const markers = [];
   let clusterOptions;
@@ -41,7 +48,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   const map = {setView() {return this;}, fitBounds() {fits++;}, eachLayer() {}};
   const group = {addTo() {return this;}, clearLayers() {state.clears++;}, addLayers() {}, getBounds() {return {};}};
   const L = {
-    map: () => map,
+    map: () => { state.maps++; return map; },
     tileLayer: () => ({on(name, handler) {tileError = handler; return this;}, addTo() {return this;}}),
     markerClusterGroup(options) {clusterOptions = options; return group;},
     divIcon: options => options,
@@ -59,6 +66,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   vm.runInNewContext(source, {window, L, URL, AbortController,
     document: {querySelector: () => root, createElement: element, createTextNode: text => ({textContent: text})},
     fetch: async () => {
+      state.fetches++;
       if (state.reject) throw new Error('Offline');
       return {ok: true, redirected: false, json: async () => data || {parks: [], unmapped_event_count: 0}};
     }});
@@ -173,4 +181,16 @@ test('without Leaflet, Try again reloads the page', async () => {
   const ui = await controller({leaflet: false});
   assert.equal(ui.nodes['[data-map-error]'].hidden, false);
   assert.equal(typeof ui.nodes['[data-map-retry]'].listeners.click, 'function');
+});
+
+test('no park data: map markup is absent, so initialization exits without throwing or loading the map', async () => {
+  for (const leaflet of [true, false]) {
+    const ui = await controller({noParkData: true, leaflet});  // a TypeError here fails the test
+    assert.equal(ui.state.fetches, 0, 'no map data request');
+    assert.equal(ui.state.maps, 0, 'Leaflet is never initialized');
+    assert.equal(ui.markers.length, 0);
+    // The filter form still works on that page.
+    ui.checkbox.listeners.change();
+    assert.equal(ui.submits(), 1);
+  }
 });

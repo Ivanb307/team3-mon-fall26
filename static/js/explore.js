@@ -36,6 +36,9 @@
   const fallback = root.querySelector('[data-list-fallback]');
   const errorBox = root.querySelector('[data-map-error]');
   const status = root.querySelector('[data-map-status]');
+  // US-2.5 no_park_data: the page renders a message instead of the map, so there is nothing to
+  // initialize. Exit before the Leaflet check, the error handlers or any map data request.
+  if (!shell || !container) return;
   // US-2.5: the error replaces the (blank) map so it's the first thing seen; the list stays usable.
   function fail() { errorBox.hidden = false; fallback.hidden = false; status.hidden = true; shell.hidden = true; }
   // Without Leaflet there is no map to retry in place, so Try again reloads the page.

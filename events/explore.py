@@ -36,8 +36,13 @@ class ZipCodes(forms.Field):
 class ExploreFilterForm(forms.Form):
     q = forms.CharField(required=False, label='Search', widget=forms.SearchInput(
         attrs={'placeholder': 'Park, address or event', 'maxlength': 100}))
-    borough = forms.ChoiceField(required=False, choices=[('', 'All boroughs'), *Borough.choices])
-    zip = ZipCodes(required=False, label='Zip codes')
+    # US-2.3: borough and zip apply as soon as they change (data-autosubmit); the zip list is a
+    # lookahead pill selector (static/js/lookahead-select.js) that US-2.4 reuses for sports/facilities.
+    borough = forms.ChoiceField(required=False, choices=[('', 'All boroughs'), *Borough.choices],
+                                widget=forms.Select(attrs={'data-autosubmit': ''}))
+    zip = ZipCodes(required=False, label='Zip codes', widget=forms.SelectMultiple(attrs={
+        'data-lookahead': '', 'data-autosubmit': '', 'data-placeholder': 'Type a zip code',
+        'data-empty': 'No matching NYC zip codes', 'data-inputmode': 'numeric'}))
     sport = ValidChoices(required=False, choices=Activity.choices, label='Sports')
     facility = ValidChoices(required=False, choices=Facility.SPORT_FIELDS, label='Facilities')
     when = forms.ChoiceField(required=False, choices=[('', 'Any date'), ('today', 'Today')], label='Date')
@@ -101,12 +106,17 @@ def filter_params(filters):
     return params
 
 
+def zip_code_choices():
+    """Distinct five-digit zip codes of active parks, sorted (a park may list several: "10029, 10128")."""
+    return sorted({z.strip() for field in Park.objects.filter(is_retired=False).values_list('zipcode', flat=True)
+                   for z in field.split(',') if re.fullmatch(r'[0-9]{5}', z.strip())})
+
+
 def configure_filter_form(form, filters):
     """Basic controls; filter owners can replace widgets without changing URL state."""
-    zipcodes = {z.strip() for field in Park.objects.filter(is_retired=False).values_list('zipcode', flat=True)
-                for z in field.split(',') if re.fullmatch(r'[0-9]{5}', z.strip())}
-    zipcodes.update(filters['zip'])
-    form.fields['zip'].widget.choices = [(z, z) for z in sorted(zipcodes)]
+    # Keep a selected zip visible (and removable) even if its park was retired since it was chosen.
+    zipcodes = sorted(set(zip_code_choices()) | set(filters['zip']))
+    form.fields['zip'].widget.choices = [(z, z) for z in zipcodes]
     if filters['scope'] != 'all':
         form.data = form.data.copy()
         form.data['events_only'] = '1'

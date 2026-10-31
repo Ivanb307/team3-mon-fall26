@@ -17,7 +17,9 @@
     {% csrf_token %}
     {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
 
+    {% include "includes/form_field.html" with field=form.title %}
     {% include "includes/form_field.html" with field=form.park %}
+    {% include "includes/form_field.html" with field=form.meeting_spot %}
     {% include "includes/form_field.html" with field=form.activity %}
 
     <div class="event-form-row">

@@ -29,6 +29,11 @@
     </div>
 
     <div class="event-meta-item">
+      <dt>Meeting Spot</dt>
+      <dd>{{ event.meeting_spot|default:"Meeting spot not specified" }}</dd>
+    </div>
+
+    <div class="event-meta-item">
       <dt>Date &amp; Time</dt>
       <dd>{{ event.date|date:"l, F j, Y" }} at {{ event.time|time:"g:i A" }}</dd>
     </div>

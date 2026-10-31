@@ -10,6 +10,7 @@ from .models import CAPACITY_ERROR_MESSAGE, Activity, Event
 
 NYC_TZ = ZoneInfo('America/New_York')
 MAX_CAPACITY = 10000
+MEETING_SPOT_ERROR_MESSAGE = 'Please specify where in the park to meet'
 
 
 class EventCreateForm(forms.ModelForm):
@@ -30,16 +31,23 @@ class EventCreateForm(forms.ModelForm):
 
     class Meta:
         model = Event
-        fields = ('park', 'activity', 'date', 'time', 'skill_level', 'capacity', 'description')
+        fields = ('title', 'park', 'meeting_spot', 'activity', 'date', 'time', 'skill_level', 'capacity', 'description')
         labels = {
+            'title': 'Event title',
             'park': 'Park location',
+            'meeting_spot': 'Meeting spot',
             'activity': 'Activity / sport',
             'date': 'Event date',
             'time': 'Start time',
             'skill_level': 'Skill requirement',
             'description': 'Event description',
         }
+        error_messages = {
+            'meeting_spot': {'required': MEETING_SPOT_ERROR_MESSAGE},
+        }
         widgets = {
+            'title': forms.TextInput(attrs={'placeholder': 'Saturday Morning 5v5 Pickup'}),
+            'meeting_spot': forms.TextInput(attrs={'placeholder': 'North Meadow, Court 3'}),
             'date': forms.DateInput(attrs={'type': 'date'}),
             'time': forms.TimeInput(attrs={'type': 'time'}),
             'description': forms.Textarea(
@@ -54,6 +62,8 @@ class EventCreateForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['park'].queryset = Park.objects.filter(is_retired=False).order_by('name', 'gispropnum')
         self.fields['park'].empty_label = 'Select an NYC park'
+        # Blank is allowed in the model for events created before this field existed (#80).
+        self.fields['meeting_spot'].required = True
         self.fields['activity'].choices = [('', 'Select a sport')] + list(Activity.choices)
 
     def clean_capacity(self):

@@ -48,7 +48,9 @@ class EventCreationAndCapacityTests(TestCase):
 
     def valid_payload(self, **overrides):
         data = {
+            'title': 'Saturday Morning 5v5 Pickup',
             'park': self.park.pk,
+            'meeting_spot': 'North Meadow, Court 3',
             'activity': Activity.BASKETBALL,
             'date': self.future_date,
             'time': '18:30',
@@ -108,11 +110,15 @@ class EventCreationAndCapacityTests(TestCase):
         self.assertRedirects(response, reverse('event_detail', kwargs={'pk': event.pk}))
         self.assertEqual(event.organizer, self.user)
         self.assertEqual(event.owner, self.user)
+        self.assertEqual(event.title, 'Saturday Morning 5v5 Pickup')
         self.assertEqual(event.park, self.park)
+        self.assertEqual(event.meeting_spot, 'North Meadow, Court 3')
         self.assertEqual(event.activity, Activity.BASKETBALL)
         self.assertEqual(event.skill_level, SkillLevel.INTERMEDIATE)
         self.assertEqual(event.capacity, 10)
         self.assertContains(response, 'Event created and published!')
+        self.assertContains(response, 'Saturday Morning 5v5 Pickup')
+        self.assertContains(response, 'North Meadow, Court 3')
         self.assertContains(response, 'Basketball')
         self.assertContains(response, 'William McCray Playground')
         self.assertContains(response, 'organizer')
@@ -120,7 +126,7 @@ class EventCreationAndCapacityTests(TestCase):
 
     def test_missing_required_fields_rejected_without_creating_partial_record(self):
         self.client.login(username='organizer@nyu.edu', password=PASSWORD)
-        for missing_field in ('park', 'activity', 'date', 'time', 'description'):
+        for missing_field in ('title', 'park', 'meeting_spot', 'activity', 'date', 'time', 'description'):
             with self.subTest(missing_field=missing_field):
                 response = self.client.post(
                     reverse('event_create'),
@@ -129,6 +135,52 @@ class EventCreationAndCapacityTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(missing_field, response.context['form'].errors)
                 self.assertEqual(Event.objects.count(), 0)
+
+    def test_form_shows_title_and_meeting_spot_fields(self):
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
+        response = self.client.get(reverse('event_create'))
+        self.assertContains(response, 'name="title"')
+        self.assertContains(response, 'name="meeting_spot"')
+
+    def test_blank_or_whitespace_meeting_spot_shows_the_specific_error(self):
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
+        for meeting_spot in ('', '   '):
+            with self.subTest(meeting_spot=meeting_spot):
+                response = self.client.post(reverse('event_create'), self.valid_payload(meeting_spot=meeting_spot))
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.context['form'].errors.get('meeting_spot'),
+                    ['Please specify where in the park to meet'],
+                )
+                self.assertEqual(Event.objects.count(), 0)
+
+    def test_whitespace_title_is_rejected(self):
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
+        response = self.client.post(reverse('event_create'), self.valid_payload(title='   '))
+        self.assertIn('title', response.context['form'].errors)
+        self.assertEqual(Event.objects.count(), 0)
+
+    def test_title_and_meeting_spot_are_saved_without_surrounding_whitespace(self):
+        self.client.login(username='organizer@nyu.edu', password=PASSWORD)
+        self.client.post(
+            reverse('event_create'),
+            self.valid_payload(title='  Evening Run  ', meeting_spot='  Boathouse  '),
+        )
+        event = Event.objects.get()
+        self.assertEqual(event.title, 'Evening Run')
+        self.assertEqual(event.meeting_spot, 'Boathouse')
+
+    def test_event_created_before_meeting_spots_shows_fallback_on_its_page(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            park=self.park,
+            activity=Activity.BASKETBALL,
+            date=timezone.localdate() + datetime.timedelta(days=7),
+            time=datetime.time(18, 30),
+            description='Half-court 5v5 run.',
+        )
+        response = self.client.get(reverse('event_detail', kwargs={'pk': event.pk}))
+        self.assertContains(response, 'Meeting spot not specified')
 
     def test_past_date_is_rejected_without_creating_event(self):
         self.client.login(username='organizer@nyu.edu', password=PASSWORD)
@@ -264,7 +316,9 @@ class EventDiscoveryFeedTests(TestCase):
     def test_feed_shows_events_created_through_the_create_form(self):
         self.client.login(username='host@nyu.edu', password=PASSWORD)
         self.client.post(reverse('event_create'), {
+            'title': 'Prospect Disc Toss',
             'park': self.brooklyn_park.pk,
+            'meeting_spot': 'Long Meadow, north end',
             'activity': Activity.ULTIMATE_FRISBEE,
             'date': (self.today + datetime.timedelta(days=4)).isoformat(),
             'time': '15:00',
@@ -275,6 +329,8 @@ class EventDiscoveryFeedTests(TestCase):
         self.client.logout()
 
         response = self.client.get(reverse('event_list'))
+        self.assertContains(response, 'Prospect Disc Toss')
+        self.assertContains(response, 'Meet at Long Meadow, north end')
         self.assertContains(response, 'Ultimate frisbee')
         self.assertContains(response, 'Prospect Park')
 

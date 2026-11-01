@@ -47,17 +47,19 @@ class ProfileSetupView(LoginRequiredMixin, FormView):
         kwargs['user'] = self.request.user
         return kwargs
 
+    def is_edit(self):
+        """/profile/edit/ is the Edit side of the Profile toggle; /register/profile/ is first-time setup (US-1.9)."""
+        return self.request.resolver_match.url_name == 'edit_profile'
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        is_edit = self.request.resolver_match.url_name == 'edit_profile'
-        context['is_edit'] = is_edit
-        # Profile settings open read-only; ?edit=1 or a form with errors unlocks the fields.
-        # First-time setup is always editable.
-        context['editing'] = not is_edit or 'edit' in self.request.GET or context['form'].is_bound
+        # Both pages always open editable; the old read-only step and ?edit=1 are gone.
+        context['is_edit'] = self.is_edit()
         return context
 
     def form_valid(self, form):
         user = self.request.user
+        original = (user.username, user.first_name, user.last_name)
         user.username = form.cleaned_data['display_username']
         user.first_name = form.cleaned_data['first_name']
         user.last_name = form.cleaned_data['last_name']
@@ -66,12 +68,14 @@ class ProfileSetupView(LoginRequiredMixin, FormView):
                 user.save(update_fields=['username', 'first_name', 'last_name'])
                 form.save()
         except IntegrityError:
+            # Nothing was saved; keep the page (account menu, View link) on the username that still exists.
+            user.username, user.first_name, user.last_name = original
             form.add_error('display_username', 'That username is no longer available. Please choose another username.')
             return self.form_invalid(form)
         messages.success(self.request, 'Profile details saved.', extra_tags='auto-dismiss')
-        # Saving settings returns them to read-only; first-time setup carries on home (#69).
-        if self.request.resolver_match.url_name == 'edit_profile':
-            return redirect('edit_profile')
+        # Edit returns to View at the (possibly new) username; first-time setup carries on home (#69).
+        if self.is_edit():
+            return redirect('public_profile', username=user.username)
         return redirect('home')
 
 

@@ -4,6 +4,7 @@
 {% block body_class %}page--plain{% endblock %}
 
 {% block content %}
+{% if is_own_profile %}{% include "accounts/_profile_toggle.html" with active="view" %}{% endif %}
 <article class="profile-settings">
   <header class="profile-card-header">
     <div class="profile-photo-preview">
@@ -17,9 +18,6 @@
       <h1 class="profile-settings-title">@{{ display_name }}</h1>
       <p class="profile-settings-subtitle">Member since {{ member.date_joined|date:"F Y" }}</p>
     </div>
-    {% if is_own_profile %}
-      <a class="btn btn--ghost" href="{% url 'edit_profile' %}?edit=1">Edit profile</a>
-    {% endif %}
   </header>
 
   <section class="profile-settings-section">

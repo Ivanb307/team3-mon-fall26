@@ -20,7 +20,7 @@
       <nav class="site-nav" aria-label="Account">
         {% if event_list_url %}<a class="site-nav-link" href="{{ event_list_url }}">Events</a>{% endif %}
         {% if user.is_authenticated %}
-          {% url 'public_profile' username=user.username as profile_url %}{% url 'edit_profile' as edit_profile_url %}
+          {% url 'public_profile' username=user.username as profile_url %}
           <a class="btn btn--primary" href="{{ event_create_url|default:'/events/create/' }}">Create event</a>
           {% with nav_name=user.profile.display_username|default:user.username %}
           <details class="account-menu" id="account-menu">
@@ -38,8 +38,7 @@
               </span>
             </summary>
             <div class="account-menu-panel">
-              <a class="account-menu-item account-menu-item--profile" href="{{ profile_url }}">View profile</a>
-              <a class="account-menu-item account-menu-item--edit" href="{{ edit_profile_url }}">Profile settings</a>
+              <a class="account-menu-item account-menu-item--profile" href="{{ profile_url }}">Profile</a>
               {% if event_list_url %}<a class="account-menu-item" href="{{ event_list_url }}?scope=mine">My Events</a>{% endif %}
               <hr class="account-menu-divider">
               <form method="post" action="{{ logout_url|default:'/logout/' }}">

@@ -239,10 +239,6 @@ a {
   --icon: var(--icon-user);
 }
 
-.account-menu-item--edit {
-  --icon: var(--icon-edit);
-}
-
 .account-menu-item--logout {
   --icon: var(--icon-logout);
 }

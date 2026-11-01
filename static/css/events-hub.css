@@ -4,3 +4,6 @@
 .events-hub-toggle [aria-current] { background:var(--green-900); color:#fff; }
 .events-hub-back { display:block; width:fit-content; margin-top:16px; font-size:.8125rem; color:var(--green-700); }
 @media(max-width:600px) { .events-hub-toggle a { padding:9px 14px; } }
+
+/* Profile View / Edit toggle (templates/accounts/_profile_toggle.html): aligned with the 760px profile column. */
+.profile-hub { max-width:760px; }

@@ -1,7 +1,15 @@
 from django.urls import path
 
-from .views import (EventCreateView, EventDetailView, EventListView, upcoming_events_api,
-                    event_map_api, explore_park_preview, event_rsvp, cancel_event_rsvp)
+from .views import (
+    EventCreateView,
+    EventDetailView,
+    EventListView,
+    upcoming_events_api,
+    event_map_api,
+    explore_park_preview,
+    event_rsvp,
+    cancel_event_rsvp,
+)
 
 urlpatterns = [
     path('events/', EventListView.as_view(), name='event_list'),

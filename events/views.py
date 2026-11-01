@@ -14,8 +14,15 @@ from parks.models import Facility, Park
 from .forms import EventCreateForm
 from .hub import remember_explore
 from .models import Event, EventStatus, RSVP, RSVPStatus
-from .explore import (configure_filter_form, displayed_parks, facility_labels,
-                      filter_params, filter_pills, matching_events, parse_filters)
+from .explore import (
+    configure_filter_form,
+    displayed_parks,
+    facility_labels,
+    filter_params,
+    filter_pills,
+    matching_events,
+    parse_filters,
+)
 
 
 def filter_events(params, user=None):
@@ -278,16 +285,12 @@ class EventDetailView(DetailView):
         context.update(
             active_rsvps=active_rsvps,
             confirmed_players=confirmed_players,
-            spots_remaining=(
-                None if event.capacity is None
-                else max(event.capacity - confirmed_players, 0)
-            ),
+            spots_remaining=(None if event.capacity is None else max(event.capacity - confirmed_players, 0)),
             user_rsvp=user_rsvp,
             rsvp_block_reason=reason,
             event_block_reason=event_block_reason,
             show_rsvp_block_reason=(
-                reason is not None
-                and (user_rsvp is None or user_rsvp.status != RSVPStatus.ACTIVE)
+                reason is not None and (user_rsvp is None or user_rsvp.status != RSVPStatus.ACTIVE)
             ),
             can_rsvp=(
                 self.request.user.is_authenticated

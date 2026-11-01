@@ -548,7 +548,9 @@ class EventRSVPTests(TestCase):
         self.assertContains(response, '@player')
         self.assertContains(response, '1 spot remaining')
         self.assertContains(response, 'Attending · Cancel RSVP')
-        self.assertContains(response, 'class="btn btn--primary" type="submit">Attending · Cancel RSVP</button>', html=False)
+        self.assertContains(
+            response, 'class="btn btn--primary" type="submit">Attending · Cancel RSVP</button>', html=False
+        )
         self.assertContains(response, 'You are attending this event.')
 
     def test_duplicate_active_join_is_rejected_without_changing_roster(self):
@@ -581,8 +583,11 @@ class EventRSVPTests(TestCase):
         cases = (
             (EventStatus.CANCELLED, self.event.date, 'This event has been cancelled.'),
             (EventStatus.REMOVED, self.event.date, 'This event has been removed.'),
-            (EventStatus.SCHEDULED, timezone.localdate() - datetime.timedelta(days=1),
-             'This event has already started.'),
+            (
+                EventStatus.SCHEDULED,
+                timezone.localdate() - datetime.timedelta(days=1),
+                'This event has already started.',
+            ),
         )
         self.client.force_login(self.player)
 
@@ -594,7 +599,9 @@ class EventRSVPTests(TestCase):
 
                 page = self.client.get(self.detail_url)
                 self.assertContains(page, reason)
-                self.assertContains(page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True)
+                self.assertContains(
+                    page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True
+                )
                 response = self.client.post(self.rsvp_url, follow=True)
 
                 self.assertContains(response, reason)
@@ -613,7 +620,9 @@ class EventRSVPTests(TestCase):
         with patch('django.utils.timezone.now', return_value=now):
             page = self.client.get(self.detail_url)
             self.assertContains(page, 'This event has already started.')
-            self.assertContains(page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True)
+            self.assertContains(
+                page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True
+            )
             response = self.client.post(self.rsvp_url, follow=True)
 
         self.assertContains(response, 'This event has already started.')
@@ -627,7 +636,9 @@ class EventRSVPTests(TestCase):
 
         full_page = self.client.get(self.detail_url)
         self.assertContains(full_page, 'This event is full.')
-        self.assertContains(full_page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True)
+        self.assertContains(
+            full_page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True
+        )
         self.assertContains(full_page, 'Full')
         rejected = self.client.post(self.rsvp_url, follow=True)
         self.assertContains(rejected, 'This event is full.')

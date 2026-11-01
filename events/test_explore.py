@@ -1,4 +1,5 @@
 """Explore map/list presentation; shared filter contracts live in test_explore_filters."""
+
 import datetime
 from html import unescape
 import re

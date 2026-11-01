@@ -15,6 +15,7 @@
     <p class="event-card-subtitle">
       Hosted by <a href="{% url 'public_profile' username=event.organizer.username %}"><strong>@{{ event.organizer.profile.display_username|default:event.organizer.username }}</strong></a>
     </p>
+    {% if event.status == 'cancelled' %}<p class="event-cancelled-notice" role="status">Cancelled by the host</p>{% endif %}
   </header>
 
   <dl class="event-meta">
@@ -100,5 +101,14 @@
       <p role="status">{{ rsvp_block_reason }}</p>
     {% endif %}
   </section>
+
+  {% if can_cancel_event %}
+    <section class="event-manage" aria-label="Manage this event">
+      <form method="post" action="{% url 'event_cancel' event.pk %}" onsubmit="return confirm('Cancel this event? Players will see that it is off, and this cannot be undone.');">
+        {% csrf_token %}
+        <button class="btn btn--ghost" type="submit">Cancel Event</button>
+      </form>
+    </section>
+  {% endif %}
 </article>
 {% endblock %}

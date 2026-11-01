@@ -1,13 +1,14 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
-from django.views.generic import CreateView, DetailView, ListView
+from django.views.generic import CreateView, DetailView, ListView, View
 
 from parks.models import Facility, Park
 
@@ -203,6 +204,38 @@ class EventCreateView(LoginRequiredMixin, CreateView):
         return reverse('event_detail', kwargs={'pk': self.object.pk})
 
 
+class OrganizerOrAdminRequiredMixin(UserPassesTestMixin):
+    """Guards an event's management URLs (#27): anonymous users go to login, anyone else unauthorized gets 403."""
+
+    def test_func(self):
+        return get_object_or_404(Event, pk=self.kwargs['pk']).can_be_managed_by(self.request.user)
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            raise PermissionDenied
+        # Return to the event page, because management URLs may not accept the GET that follows login.
+        return redirect_to_login(reverse('event_detail', kwargs={'pk': self.kwargs['pk']}))
+
+
+class EventCancelView(OrganizerOrAdminRequiredMixin, View):
+    """Soft-cancels an upcoming event (#28). The row and its roster are kept, and un-cancel is out of scope."""
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+            if event.status == EventStatus.CANCELLED:
+                messages.error(request, 'This event has already been cancelled.')
+            elif event.status == EventStatus.REMOVED:
+                messages.error(request, 'This event has been removed.')
+            elif event.is_past:
+                messages.error(request, 'This event has already started, so it can no longer be cancelled.')
+            else:
+                event.status = EventStatus.CANCELLED
+                event.save(update_fields=['status', 'updated_at'])
+                messages.success(request, 'Your event has been cancelled.')
+        return redirect(event.get_absolute_url())
+
+
 class EventDetailView(DetailView):
     model = Event
     template_name = 'events/event_detail.html'
@@ -234,7 +267,10 @@ class EventDetailView(DetailView):
         elif reason is None and event.capacity is not None and confirmed_players >= event.capacity:
             reason = 'This event is full.'
 
+        can_manage = event.can_be_managed_by(self.request.user)
         context.update(
+            can_manage=can_manage,
+            can_cancel_event=can_manage and event_block_reason is None,
             active_rsvps=active_rsvps,
             confirmed_players=confirmed_players,
             spots_remaining=(

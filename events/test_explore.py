@@ -1,5 +1,4 @@
-"""Membership, count and URL-state contracts shared by all Explore presentations."""
-
+"""Explore map/list presentation; shared filter contracts live in test_explore_filters."""
 import datetime
 from html import unescape
 import re
@@ -14,7 +13,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from parks.models import Facility, Park
-from .explore import displayed_parks, filter_params, matching_events, parse_filters
+from .explore import matching_events, parse_filters
 from .models import Event, NYC_TZ, RSVP
 
 
@@ -71,19 +70,6 @@ class ExploreTests(TestCase):
     def filters(self, query=''):
         return parse_filters(QueryDict(query))[1]
 
-    def test_defaults_invalid_parameters_and_multivalues(self):
-        form, f = parse_filters(
-            QueryDict(
-                'view=nope&tab=nope&borough=ZZ&skill=expert&zip=11211&zip=x'
-                '&sport=tennis&sport=unknown&sport=tennis&facility=tennis&facility=bad&park=-1'
-            )
-        )
-        self.assertEqual((f['view'], f['tab'], f['scope']), ('map', 'events', 'all'))
-        self.assertEqual((f['zip'], f['sport'], f['facility']), (['11211'], ['tennis'], ['tennis']))
-        self.assertFalse(f['borough'])
-        self.assertIsNone(f['park'])
-        self.assertEqual(filter_params(f).getlist('sport'), ['tennis'])
-
     def test_map_excludes_retired_missing_lat_or_missing_lon(self):
         self.central.longitude = None
         self.central.save()
@@ -111,53 +97,6 @@ class ExploreTests(TestCase):
         self.assertEqual(sum(counts.values()) + data['unmapped_event_count'], 4)
         only = self.client.get('/events/api/map/?events_only=1').json()
         self.assertEqual([p['id'] for p in only['parks']], [self.mccarren.pk])
-
-    def test_date_skill_change_counts_but_do_not_hide_parks(self):
-        self.event(skill_level='all')
-        self.event(skill_level='competitive')
-        self.event(date=self.now.date() + datetime.timedelta(days=2))
-        f = self.filters('date_from=2026-10-24&date_to=2026-10-24&skill=beginner')
-        self.assertEqual(matching_events(f).count(), 1)
-        self.assertEqual(
-            dict(displayed_parks(f).values_list('pk', 'event_count')),
-            {self.central.pk: 0, self.mccarren.pk: 1, self.unmapped.pk: 0},
-        )
-
-    def test_today_uses_new_york_date_at_utc_midnight(self):
-        self.event(date=datetime.date(2026, 10, 23), time=datetime.time(22))
-        self.event(date=datetime.date(2026, 10, 24), time=datetime.time(10))
-        utc_midnight = datetime.datetime(2026, 10, 24, 1, tzinfo=datetime.timezone.utc)
-        with patch('django.utils.timezone.now', return_value=utc_midnight):
-            self.assertEqual(matching_events(self.filters('when=today')).count(), 1)
-
-    def test_invalid_and_reversed_ranges_report_and_ignore_both_ends(self):
-        self.event()
-        for query in ('date_from=bad&date_to=2020-01-01', 'date_from=2027-01-01&date_to=2026-01-01'):
-            with self.subTest(query=query):
-                form, f = parse_filters(QueryDict(query))
-                self.assertTrue(form.errors)
-                self.assertIsNone(f['date_from'])
-                self.assertIsNone(f['date_to'])
-                self.assertEqual(matching_events(f).count(), 1)
-
-    def test_event_keyword_hit_brings_its_park_and_no_duplicate_counts(self):
-        self.event(self.central, title='Special hoops 5v5')
-        f = self.filters('q=5v5&sport=basketball')
-        self.assertEqual(list(displayed_parks(f).values_list('pk', 'event_count')), [(self.central.pk, 1)])
-
-    def test_zip_or_and_facilities_and_whole_token_matching(self):
-        self.event(self.central)
-        self.event()
-        f = self.filters('zip=10128&zip=11211&facility=tennis&facility=track_and_field')
-        self.assertEqual(list(matching_events(f).values_list('park_id', flat=True)), [self.central.pk])
-        self.assertEqual(displayed_parks(self.filters('facility=regulation_soccer')).count(), 0)
-
-    def test_sport_facilities_active_and_sport_without_facilities(self):
-        self.assertEqual(
-            list(displayed_parks(self.filters('sport=tennis')).values_list('pk', flat=True)), [self.central.pk]
-        )
-        self.assertEqual(displayed_parks(self.filters('sport=basketball')).count(), 0)
-        self.assertEqual(displayed_parks(self.filters('sport=running')).count(), 3)
 
     def test_scopes_keep_private_results_private_and_force_events_only(self):
         mine = self.event(status='cancelled')
@@ -193,22 +132,6 @@ class ExploreTests(TestCase):
             self.assertEqual(response.context['park_total'], len(data['parks']))
             self.assertEqual(response.context['explore_params'].getlist('zip'), ['11211', '10128'])
 
-    def test_pagination_toggle_and_removable_pills_preserve_repeated_params(self):
-        for i in range(23):
-            self.event(title=f'Pickup {i}')
-        page = self.client.get('/events/?view=list&zip=11211&zip=10029&sport=basketball&sport=tennis')
-        self.assertEqual(len(page.context['events']), 20)
-        links = [unescape(href) for href in re.findall(r'href="([^"]+)"', page.content.decode())]
-        next_link = next(link for link in links if 'page=2' in link)
-        params = parse_qs(urlsplit(next_link).query)
-        self.assertEqual(params['zip'], ['11211', '10029'])
-        self.assertEqual(params['sport'], ['basketball', 'tennis'])
-        second = self.client.get('/events/' + next_link)
-        self.assertEqual(len(second.context['events']), 3)
-        remove = next(p['url'] for p in page.context['filter_pills'] if p['label'] == 'Zip codes: 11211')
-        self.assertEqual(parse_qs(urlsplit(remove).query)['zip'], ['10029'])
-        self.assertNotIn('page=', remove)
-
     def test_map_unpaginated_and_query_count_does_not_grow_with_parks(self):
         self.event()
         with CaptureQueriesContext(connection) as before:
@@ -240,11 +163,6 @@ class ExploreTests(TestCase):
         self.assertContains(response, 'Saturday pickup')
         self.assertContains(response, 'Switch to List')
         self.assertContains(response, 'data-list-fallback')
-
-    def test_legacy_include_past_is_retired(self):
-        self.event(date=self.now.date() - datetime.timedelta(days=1))
-        self.assertEqual(self.client.get('/events/api/upcoming/?include_past=1').json()['count'], 0)
-        self.assertNotContains(self.client.get('/events/'), 'Include past events')
 
     def test_parks_tab_orders_event_parks_first_and_paginates_with_repeated_filters(self):
         self.event()

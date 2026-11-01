@@ -13,7 +13,7 @@
     {% empty %}<li class="park-panel-muted">Facility details not specified</li>{% endfor %}
     </ul>
   </section>
-  <section class="park-panel-section" aria-label="Matching upcoming events">
+  <section class="park-panel-section" aria-label="Matching events">
     <h3>{{ panel_event_total }} matching event{{ panel_event_total|pluralize }}</h3>
     {% include "events/_park_events.html" %}
     {% if panel_event_total %}<a class="park-panel-all-events" href="{{ events_url }}">See all {{ panel_event_total }} event{{ panel_event_total|pluralize }} here</a>{% endif %}

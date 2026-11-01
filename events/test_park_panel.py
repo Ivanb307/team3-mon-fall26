@@ -90,15 +90,62 @@ class ParkPanelTests(TestCase):
         data = self.client.get('/events/api/map/?' + query).json()
         self.assertEqual(data['parks'][0]['event_count'], response.context['panel_event_total'])
 
-    def test_personal_panel_still_hides_cancelled_and_removed_events(self):
-        self.client.force_login(self.host)
+    def test_personal_scopes_keep_panel_map_and_list_membership_in_sync(self):
+        self.client.force_login(self.viewer)
+        hosted = [self.event(title=f'Hosted {status}', organizer=self.viewer, status=status)
+                  for status in ('scheduled', 'cancelled', 'removed')]
+        attending = [self.event(title=f'Attending {status}', status=status)
+                     for status in ('scheduled', 'cancelled', 'removed')]
+        for event in attending:
+            RSVP.objects.create(event=event, user=self.viewer)
+        self.event(title='Unrelated private event', status='cancelled')
+        self.event(title='Different sport', organizer=self.viewer, activity='tennis', status='cancelled')
+        self.event(title='Started hosted event', organizer=self.viewer,
+                   date=self.now.date(), time=datetime.time(11))
+        started = self.event(title='Started attended event', date=self.now.date(), time=datetime.time(11))
+        RSVP.objects.create(event=started, user=self.viewer)
+
+        for scope, expected in (('hosting', hosted), ('attending', attending), ('mine', hosted + attending)):
+            with self.subTest(scope=scope):
+                query = f'scope={scope}&park={self.park.pk}&sport=basketball&zip=11211&zip=11222'
+                response = self.panel(query)
+                ids = [event.pk for event in response.context['park_events']]
+                self.assertEqual(ids, sorted(event.pk for event in expected))
+                listing = self.client.get('/events/?' + query + '&view=list&tab=events')
+                self.assertEqual(ids, [event.pk for event in listing.context['events']])
+                data = self.client.get('/events/api/map/?' + query).json()
+                self.assertEqual(response.context['panel_event_total'], listing.context['event_total'])
+                self.assertEqual(response.context['panel_event_total'], data['parks'][0]['event_count'])
+                initial_panel = self.client.get('/events/?' + query + '&view=map&panel=1')
+                self.assertEqual(ids, [event.pk for event in initial_panel.context['park_events']])
+                self.assertContains(response, 'class="event-badge explore-status-badge">Cancelled</span>')
+                self.assertContains(response, 'class="event-badge explore-status-badge">Removed by a moderator</span>')
+                self.assertContains(response, f'See all {len(expected)} events here')
+
+    def test_public_scope_still_hides_cancelled_and_removed_events_for_members(self):
+        self.client.force_login(self.viewer)
         kept = self.event()
-        self.event(title='Cancelled private event', status='cancelled')
-        self.event(title='Removed private event', status='removed')
-        response = self.panel('scope=hosting')
-        self.assertEqual([e.pk for e in response.context['park_events']], [kept.pk])
-        self.assertNotContains(response, 'Cancelled private event')
-        self.assertNotContains(response, 'Removed private event')
+        cancelled = self.event(title='Private cancelled game', organizer=self.viewer, status='cancelled')
+        removed = self.event(title='Private removed game', status='removed')
+        RSVP.objects.create(event=removed, user=self.viewer)
+        response = self.panel('scope=all')
+        self.assertEqual([event.pk for event in response.context['park_events']], [kept.pk])
+        for event in (cancelled, removed):
+            self.assertNotContains(response, event.title)
+        self.assertNotContains(response, 'explore-status-badge')
+
+    def test_cancelled_and_removed_rsvps_do_not_expose_private_events(self):
+        self.client.force_login(self.viewer)
+        kept = self.event(title='Active reservation', status='cancelled')
+        RSVP.objects.create(event=kept, user=self.viewer)
+        for status in (RSVPStatus.CANCELLED, RSVPStatus.REMOVED):
+            event = self.event(title=f'Not attending {status}', status='removed')
+            RSVP.objects.create(event=event, user=self.viewer, status=status)
+        for scope in ('mine', 'attending'):
+            with self.subTest(scope=scope):
+                response = self.panel(f'scope={scope}')
+                self.assertEqual([event.pk for event in response.context['park_events']], [kept.pk])
+                self.assertNotContains(response, 'Not attending')
 
     def test_availability_and_personal_badges_use_active_rsvps(self):
         self.client.force_login(self.viewer)
@@ -125,7 +172,7 @@ class ParkPanelTests(TestCase):
     def test_empty_state_invites_hosting_at_this_park(self):
         self.event(activity='tennis')
         response = self.panel('sport=basketball')
-        self.assertContains(response, 'No upcoming events here match your filters.')
+        self.assertContains(response, 'No events here match your filters.')
         self.assertContains(response, f'href="/events/create/?park={self.park.pk}"')
         self.assertContains(response, f'href="/parks/{self.park.pk}/"')
         self.assertNotContains(response, 'See all 0')

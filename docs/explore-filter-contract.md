@@ -160,9 +160,13 @@ and constant query count. Existing feed tests now assert that the retired
 
 The existing `explore_park_preview` endpoint and `park_preview_context()` now
 render the full panel. It uses the same validated filters, active facilities,
-and `events/_park_events.html` as the park page from #94/#95. Only scheduled,
-upcoming events are shown in the panel, including in personal scopes; no
-cancelled or removed event is exposed as an upcoming game. Availability uses
+and `events/_park_events.html` as the park page from #94/#95. The panel uses
+`matching_events()` without an extra status filter, so its membership and count
+agree with the map and list. Public Explore only shows scheduled upcoming
+events. Personal scopes also retain the viewer's cancelled/removed future
+events, labelled with their status; ownership or an active RSVP is still required,
+and already-started events stay hidden. The full park page continues to show
+scheduled upcoming events only. Availability uses
 `with_confirmed_players()` and the park-page availability helper. Active RSVP
 membership is an EXISTS annotation, so badges do not add per-event queries.
 

@@ -184,7 +184,7 @@ def park_preview_context(park, filters, user):
     params['park'] = str(park.pk)
     params['view'] = 'list'
     params['tab'] = 'events'
-    events = (matching_events(filters, user).upcoming().filter(park=park)
+    events = (matching_events(filters, user).filter(park=park)
               .with_confirmed_players().select_related('organizer__profile'))
     if user.is_authenticated:
         events = events.annotate(viewer_attending=Exists(RSVP.objects.filter(

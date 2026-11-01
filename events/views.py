@@ -1,11 +1,12 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView
 
 from parks.models import Facility, Park
@@ -13,7 +14,7 @@ from parks.views import facility_groups, with_availability
 
 from .forms import EventCreateForm
 from .hub import remember_explore
-from .models import Event, RSVP, RSVPStatus
+from .models import Event, EventStatus, RSVP, RSVPStatus
 from .explore import (configure_filter_form, displayed_parks, facility_labels,
                       filter_params, filter_pills, matching_events, parse_filters)
 
@@ -224,5 +225,115 @@ class EventDetailView(DetailView):
     context_object_name = 'event'
 
     def get_queryset(self):
-        return Event.objects.select_related('park', 'organizer')
+        return Event.objects.with_confirmed_players().select_related('park', 'organizer')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        event = self.object
+        active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).select_related('user')
+        confirmed_players = event.confirmed_players
+        user_rsvp = None
+        if self.request.user.is_authenticated and self.request.user != event.organizer:
+            user_rsvp = event.rsvps.filter(user=self.request.user).first()
+
+        event_block_reason = None
+        if event.status == EventStatus.CANCELLED:
+            event_block_reason = 'This event has been cancelled.'
+        elif event.status == EventStatus.REMOVED:
+            event_block_reason = 'This event has been removed.'
+        elif event.is_past:
+            event_block_reason = 'This event has already started.'
+
+        reason = event_block_reason
+        if reason is None and user_rsvp and user_rsvp.status == RSVPStatus.REMOVED:
+            reason = 'Your RSVP was removed by the organizer.'
+        elif reason is None and event.capacity is not None and confirmed_players >= event.capacity:
+            reason = 'This event is full.'
+
+        context.update(
+            active_rsvps=active_rsvps,
+            confirmed_players=confirmed_players,
+            spots_remaining=(
+                None if event.capacity is None
+                else max(event.capacity - confirmed_players, 0)
+            ),
+            user_rsvp=user_rsvp,
+            rsvp_block_reason=reason,
+            event_block_reason=event_block_reason,
+            show_rsvp_block_reason=(
+                reason is not None
+                and (user_rsvp is None or user_rsvp.status != RSVPStatus.ACTIVE)
+            ),
+            can_rsvp=(
+                self.request.user.is_authenticated
+                and self.request.user != event.organizer
+                and (user_rsvp is None or user_rsvp.status == RSVPStatus.CANCELLED)
+                and reason is None
+            ),
+        )
+        return context
+
+
+@require_POST
+def event_rsvp(request, pk):
+    event = get_object_or_404(Event.objects.with_confirmed_players(), pk=pk)
+    if not request.user.is_authenticated:
+        return redirect_to_login(event.get_absolute_url())
+
+    detail_url = event.get_absolute_url()
+    if request.user == event.organizer:
+        messages.error(request, 'Organizers cannot RSVP to their own event.')
+        return redirect(detail_url)
+
+    rsvp = RSVP.objects.filter(event=event, user=request.user).first()
+    if rsvp and rsvp.status == RSVPStatus.ACTIVE:
+        messages.error(request, "You're already attending.")
+        return redirect(detail_url)
+    if rsvp and rsvp.status == RSVPStatus.REMOVED:
+        messages.error(request, 'Your RSVP was removed by the organizer.')
+        return redirect(detail_url)
+
+    if event.status == EventStatus.CANCELLED:
+        messages.error(request, 'This event has been cancelled.')
+    elif event.status == EventStatus.REMOVED:
+        messages.error(request, 'This event has been removed.')
+    elif event.is_past:
+        messages.error(request, 'This event has already started.')
+    elif event.capacity is not None and event.confirmed_players >= event.capacity:
+        messages.error(request, 'This event is full.')
+    else:
+        if rsvp:
+            rsvp.status = RSVPStatus.ACTIVE
+            rsvp.save(update_fields=['status', 'updated_at'])
+        else:
+            RSVP.objects.create(event=event, user=request.user)
+        messages.success(request, 'You are attending this event.')
+
+    return redirect(detail_url)
+
+
+@require_POST
+def cancel_event_rsvp(request, pk):
+    event = get_object_or_404(Event, pk=pk)
+    if not request.user.is_authenticated:
+        return redirect_to_login(event.get_absolute_url())
+
+    detail_url = event.get_absolute_url()
+    if request.user == event.organizer:
+        messages.error(request, 'Organizers cannot cancel an RSVP to their own event.')
+        return redirect(detail_url)
+
+    with transaction.atomic():
+        rsvp = RSVP.objects.select_for_update().filter(event=event, user=request.user).first()
+        if event.status != EventStatus.SCHEDULED:
+            messages.error(request, 'RSVPs can only be cancelled for scheduled events.')
+        elif event.is_past:
+            messages.error(request, 'This event has already started.')
+        elif rsvp is None or rsvp.status != RSVPStatus.ACTIVE:
+            messages.error(request, 'You are not attending this event.')
+        else:
+            rsvp.status = RSVPStatus.CANCELLED
+            rsvp.save(update_fields=['status', 'updated_at'])
+            messages.success(request, 'Your RSVP has been cancelled.')
+
+    return redirect(detail_url)

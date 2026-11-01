@@ -1,5 +1,6 @@
 import datetime
 import importlib
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection
@@ -473,6 +474,246 @@ class FoundationSchemaTests(TestCase):
         })
         self.assertIn('activity', response.context['form'].errors)
         self.assertEqual(Event.objects.count(), 0)
+
+
+class EventRSVPTests(TestCase):
+    """Joining an event and keeping its active RSVP roster in sync (#30)."""
+
+    def setUp(self):
+        self.host = User.objects.create_user('host', 'host@nyu.edu', PASSWORD)
+        self.player = User.objects.create_user('player', 'player@nyu.edu', PASSWORD)
+        self.park = Park.objects.create(
+            gispropnum='M030',
+            name='Riverside Park',
+            borough=Borough.MANHATTAN,
+        )
+        self.event = Event.objects.create(
+            organizer=self.host,
+            park=self.park,
+            title='Evening Basketball',
+            activity=Activity.BASKETBALL,
+            date=timezone.localdate() + datetime.timedelta(days=1),
+            time=datetime.time(18, 30),
+            capacity=3,
+            description='Bring a ball.',
+        )
+        self.detail_url = reverse('event_detail', kwargs={'pk': self.event.pk})
+        self.rsvp_url = reverse('event_rsvp', kwargs={'pk': self.event.pk})
+        self.cancel_rsvp_url = reverse('event_rsvp_cancel', kwargs={'pk': self.event.pk})
+
+    def test_authenticated_join_creates_active_rsvp_and_updates_roster_and_availability(self):
+        self.client.force_login(self.player)
+
+        join_page = self.client.get(self.detail_url)
+        self.assertContains(join_page, '<button class="btn btn--primary" type="submit">Join event</button>', html=True)
+        response = self.client.post(self.rsvp_url, follow=True)
+
+        rsvp = RSVP.objects.get(event=self.event, user=self.player)
+        self.assertEqual(rsvp.status, RSVPStatus.ACTIVE)
+        self.assertEqual(RSVP.objects.filter(event=self.event, status=RSVPStatus.ACTIVE).count(), 1)
+        self.assertRedirects(response, self.detail_url)
+        self.assertContains(response, '@player')
+        self.assertContains(response, '1 spot remaining')
+        self.assertContains(response, 'Attending · Cancel RSVP')
+        self.assertContains(response, 'class="btn btn--primary" type="submit">Attending · Cancel RSVP</button>', html=False)
+        self.assertContains(response, 'You are attending this event.')
+
+    def test_duplicate_active_join_is_rejected_without_changing_roster(self):
+        self.client.force_login(self.player)
+        RSVP.objects.create(event=self.event, user=self.player, status=RSVPStatus.ACTIVE)
+
+        response = self.client.post(self.rsvp_url, follow=True)
+
+        self.assertIn("You're already attending.", [str(message) for message in response.context['messages']])
+        self.assertEqual(RSVP.objects.filter(event=self.event).count(), 1)
+        self.assertEqual(RSVP.objects.get(event=self.event, user=self.player).status, RSVPStatus.ACTIVE)
+        self.assertContains(response, '1 spot remaining')
+        self.assertContains(response, '@player')
+
+    def test_cancelled_rsvp_is_reactivated_without_adding_a_row(self):
+        old_rsvp = RSVP.objects.create(event=self.event, user=self.player, status=RSVPStatus.CANCELLED)
+        self.client.force_login(self.player)
+
+        response = self.client.post(self.rsvp_url, follow=True)
+
+        old_rsvp.refresh_from_db()
+        self.assertRedirects(response, self.detail_url)
+        self.assertEqual(old_rsvp.status, RSVPStatus.ACTIVE)
+        self.assertEqual(RSVP.objects.filter(event=self.event, user=self.player).count(), 1)
+        self.assertEqual(RSVP.objects.filter(event=self.event, status=RSVPStatus.ACTIVE).count(), 1)
+        self.assertContains(response, '@player')
+        self.assertContains(response, '1 spot remaining')
+
+    def test_event_status_or_start_blocks_ui_and_direct_post(self):
+        cases = (
+            (EventStatus.CANCELLED, self.event.date, 'This event has been cancelled.'),
+            (EventStatus.REMOVED, self.event.date, 'This event has been removed.'),
+            (EventStatus.SCHEDULED, timezone.localdate() - datetime.timedelta(days=1),
+             'This event has already started.'),
+        )
+        self.client.force_login(self.player)
+
+        for status, event_date, reason in cases:
+            with self.subTest(reason=reason):
+                self.event.status = status
+                self.event.date = event_date
+                self.event.save(update_fields=['status', 'date'])
+
+                page = self.client.get(self.detail_url)
+                self.assertContains(page, reason)
+                self.assertContains(page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True)
+                response = self.client.post(self.rsvp_url, follow=True)
+
+                self.assertContains(response, reason)
+                self.assertFalse(RSVP.objects.filter(event=self.event).exists())
+
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.status, EventStatus.SCHEDULED)
+
+    def test_event_that_started_earlier_today_has_disabled_join_and_rejects_post(self):
+        now = datetime.datetime(2026, 10, 28, 15, 5, tzinfo=NYC_TZ)
+        self.event.date = now.date()
+        self.event.time = datetime.time(15)
+        self.event.save(update_fields=['date', 'time'])
+        self.client.force_login(self.player)
+
+        with patch('django.utils.timezone.now', return_value=now):
+            page = self.client.get(self.detail_url)
+            self.assertContains(page, 'This event has already started.')
+            self.assertContains(page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True)
+            response = self.client.post(self.rsvp_url, follow=True)
+
+        self.assertContains(response, 'This event has already started.')
+        self.assertFalse(RSVP.objects.filter(event=self.event, user=self.player).exists())
+
+    def test_full_event_blocks_join_and_cancelled_or_removed_rsvps_do_not_consume_spots(self):
+        self.event.capacity = 1
+        self.event.host_is_playing = True
+        self.event.save(update_fields=['capacity', 'host_is_playing'])
+        self.client.force_login(self.player)
+
+        full_page = self.client.get(self.detail_url)
+        self.assertContains(full_page, 'This event is full.')
+        self.assertContains(full_page, '<button class="btn btn--primary" type="button" disabled>Join event</button>', html=True)
+        self.assertContains(full_page, 'Full')
+        rejected = self.client.post(self.rsvp_url, follow=True)
+        self.assertContains(rejected, 'This event is full.')
+        self.assertFalse(RSVP.objects.filter(event=self.event).exists())
+
+        self.event.capacity = 2
+        self.event.host_is_playing = False
+        self.event.save(update_fields=['capacity', 'host_is_playing'])
+        RSVP.objects.create(event=self.event, user=self.host, status=RSVPStatus.CANCELLED)
+        removed_user = User.objects.create_user('removed-player', 'removed@nyu.edu', PASSWORD)
+        RSVP.objects.create(event=self.event, user=removed_user, status=RSVPStatus.REMOVED)
+
+        accepted = self.client.post(self.rsvp_url, follow=True)
+        self.assertContains(accepted, '@player')
+        self.assertContains(accepted, '1 spot remaining')
+        self.assertEqual(RSVP.objects.filter(event=self.event, status=RSVPStatus.ACTIVE).count(), 1)
+
+    def test_organizer_has_no_join_control_or_rsvp_row_and_direct_post_is_rejected(self):
+        self.client.force_login(self.host)
+
+        page = self.client.get(self.detail_url)
+        self.assertNotContains(page, 'Join event')
+        self.assertNotContains(page, 'Attending · Cancel RSVP')
+        response = self.client.post(self.rsvp_url, follow=True)
+
+        self.assertContains(response, 'Organizers cannot RSVP to their own event.')
+        self.assertFalse(RSVP.objects.filter(event=self.event, user=self.host).exists())
+
+    def test_anonymous_post_redirects_to_login_and_returns_to_event(self):
+        response = self.client.post(self.rsvp_url)
+        login_url = f"{reverse('login')}?next={self.detail_url}"
+
+        self.assertRedirects(response, login_url)
+        self.assertFalse(RSVP.objects.filter(event=self.event).exists())
+
+    def test_removed_rsvp_cannot_be_reactivated(self):
+        self.event.capacity = 1
+        self.event.host_is_playing = True
+        self.event.save(update_fields=['capacity', 'host_is_playing'])
+        RSVP.objects.create(event=self.event, user=self.player, status=RSVPStatus.REMOVED)
+        self.client.force_login(self.player)
+
+        page = self.client.get(self.detail_url)
+        self.assertContains(page, 'Your RSVP was removed by the organizer.')
+        self.assertNotContains(page, 'This event is full.')
+        response = self.client.post(self.rsvp_url, follow=True)
+
+        self.assertContains(response, 'Your RSVP was removed by the organizer.')
+        self.assertEqual(RSVP.objects.filter(event=self.event, user=self.player).count(), 1)
+        self.assertEqual(RSVP.objects.get(event=self.event, user=self.player).status, RSVPStatus.REMOVED)
+
+    def test_cancel_rsvp_removes_attendee_and_reopens_a_spot(self):
+        RSVP.objects.create(event=self.event, user=self.player, status=RSVPStatus.ACTIVE)
+        self.event.capacity = 2
+        self.event.save(update_fields=['capacity'])
+        self.client.force_login(self.player)
+
+        page = self.client.get(self.detail_url)
+        self.assertContains(page, 'Attending · Cancel RSVP')
+        self.assertContains(page, 'class="btn btn--primary"')
+        self.assertContains(page, 'confirm(')
+        self.assertContains(page, 'Cancel your RSVP?')
+        response = self.client.post(self.cancel_rsvp_url, follow=True)
+
+        rsvp = RSVP.objects.get(event=self.event, user=self.player)
+        self.assertRedirects(response, self.detail_url)
+        self.assertEqual(rsvp.status, RSVPStatus.CANCELLED)
+        self.assertContains(response, 'Your RSVP has been cancelled.')
+        self.assertNotContains(response, '@player')
+        self.assertContains(response, '1 spot remaining')
+        self.assertContains(response, '>Join event</button>')
+
+        rejoined = self.client.post(self.rsvp_url, follow=True)
+        rsvp.refresh_from_db()
+        self.assertEqual(rsvp.status, RSVPStatus.ACTIVE)
+        self.assertEqual(RSVP.objects.filter(event=self.event, user=self.player).count(), 1)
+        self.assertContains(rejoined, 'Attending · Cancel RSVP')
+        self.assertContains(rejoined, 'Full')
+
+    def test_cancelling_a_full_event_allows_another_member_to_join(self):
+        self.event.capacity = 2
+        self.event.save(update_fields=['capacity'])
+        RSVP.objects.create(event=self.event, user=self.player, status=RSVPStatus.ACTIVE)
+        other_player = User.objects.create_user('other-player', 'other@nyu.edu', PASSWORD)
+        self.client.force_login(self.player)
+
+        cancelled = self.client.post(self.cancel_rsvp_url, follow=True)
+        self.assertEqual(RSVP.objects.get(event=self.event, user=self.player).status, RSVPStatus.CANCELLED)
+        self.client.force_login(other_player)
+        joined = self.client.post(self.rsvp_url, follow=True)
+
+        self.assertContains(cancelled, '1 spot remaining')
+        self.assertEqual(RSVP.objects.get(event=self.event, user=other_player).status, RSVPStatus.ACTIVE)
+        self.assertContains(joined, '@other-player')
+
+    def test_cancel_rsvp_after_start_is_refused_and_keeps_roster_record(self):
+        RSVP.objects.create(event=self.event, user=self.player, status=RSVPStatus.ACTIVE)
+        self.event.date = timezone.localdate() - datetime.timedelta(days=1)
+        self.event.save(update_fields=['date'])
+        self.client.force_login(self.player)
+
+        page = self.client.get(self.detail_url)
+        self.assertContains(page, 'This event has already started.')
+        self.assertNotContains(page, 'Attending · Cancel RSVP')
+        response = self.client.post(self.cancel_rsvp_url, follow=True)
+
+        self.assertContains(response, 'This event has already started.')
+        self.assertEqual(RSVP.objects.get(event=self.event, user=self.player).status, RSVPStatus.ACTIVE)
+
+    def test_organizer_cannot_cancel_rsvp_and_deleted_event_cannot_be_joined(self):
+        self.client.force_login(self.host)
+        page = self.client.get(self.detail_url)
+        self.assertNotContains(page, 'Cancel RSVP')
+        response = self.client.post(self.cancel_rsvp_url, follow=True)
+        self.assertContains(response, 'Organizers cannot cancel an RSVP to their own event.')
+        self.assertFalse(RSVP.objects.filter(event=self.event, user=self.host).exists())
+
+        self.event.delete()
+        self.assertEqual(self.client.post(self.rsvp_url).status_code, 404)
 
 
 class StandardActivityMappingTests(TestCase):

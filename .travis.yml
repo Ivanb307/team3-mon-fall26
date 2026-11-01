@@ -34,3 +34,15 @@ script:
 # Needs COVERALLS_REPO_TOKEN set in the Travis repository settings (never commit it).
 after_success:
   - coveralls
+
+# Email the whole team, not just the commit's author: every failed build, and the first green build after a failure.
+notifications:
+  email:
+    recipients:
+      - raemaekok@gmail.com
+      - yuelihe2@gmail.com
+      - donuorah1925@gmail.com
+      - ib2317@nyu.edu
+      - wongyixuan8872@gmail.com
+    on_success: change
+    on_failure: always

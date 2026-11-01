@@ -15,4 +15,6 @@
 @media(max-width:600px) {
   .park-detail { padding:20px 16px; }
   .park-detail-actions .btn { flex:1 1 100%; }
+  .park-events .discover-link { grid-template-columns:auto 1fr; }
+  .park-events .discover-capacity { grid-column:2; justify-items:start; text-align:left; }
 }

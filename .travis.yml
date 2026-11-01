@@ -27,7 +27,7 @@ script:
   - python manage.py makemigrations --check --dry-run
   - coverage run manage.py test
   - coverage run --append -m unittest discover -s infra -p 'test_*.py'
-  - coverage report
+  - coverage report --fail-under=85
   - node --test events/js/explore.test.cjs events/js/lookahead-select.test.cjs
   - find .platform/hooks .platform/confighooks -name '*.sh' -exec bash -n {} +
 

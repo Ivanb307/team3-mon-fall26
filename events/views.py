@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -10,6 +10,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView
 
 from parks.models import Facility, Park
+from parks.views import facility_groups, with_availability
 
 from .forms import EventCreateForm
 from .hub import remember_explore
@@ -139,7 +140,11 @@ class EventListView(ListView):
             clear_filters_url=clear_filters_url(self.filters),
         )
         if panel:
-            selected = displayed_parks(self.filters, self.request.user).prefetch_related('facilities').first()
+            selected = (
+                displayed_parks(self.filters, self.request.user)
+                .prefetch_related(Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active')))
+                .first()
+            )
             if selected:
                 context.update(park_preview_context(selected, self.filters, self.request.user))
                 context['selected_park'] = selected
@@ -213,12 +218,17 @@ def event_map_api(request):
 
 @require_GET
 def explore_park_preview(request, pk):
-    """Small read-only preview; the full park panel/detail stories can reuse this engine."""
+    """Read-only park panel using the same validated membership as Explore (US-2.9)."""
     _, filters = parse_filters(request.GET)
     redirect = personal_scope_redirect(request, filters)
     if redirect:
         return redirect
-    park = get_object_or_404(displayed_parks(filters, request.user).prefetch_related('facilities'), pk=pk)
+    park = get_object_or_404(
+        displayed_parks(filters, request.user).prefetch_related(
+            Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active'))
+        ),
+        pk=pk,
+    )
     return render(request, 'events/includes/park_preview.html', park_preview_context(park, filters, request.user))
 
 
@@ -227,12 +237,28 @@ def park_preview_context(park, filters, user):
     params['park'] = str(park.pk)
     params['view'] = 'list'
     params['tab'] = 'events'
+    events = (
+        matching_events(filters, user).filter(park=park).with_confirmed_players().select_related('organizer__profile')
+    )
+    if user.is_authenticated:
+        events = events.annotate(
+            viewer_attending=Exists(RSVP.objects.filter(event_id=OuterRef('pk'), user=user, status=RSVPStatus.ACTIVE))
+        )
+    park_events = with_availability(events)
+    for event in park_events:
+        event.viewer_hosting = user.is_authenticated and event.organizer_id == user.pk
+    close_params = filter_params(filters)
+    close_params.pop('park', None)
     return {
         'park': park,
-        'facilities': facility_labels(park),
+        'facility_groups': facility_groups(park.facilities.all()),
         'details_url': park_details_url(park),
         'events_url': reverse('event_list') + '?' + params.urlencode(),
-        'preview_events': matching_events(filters, user).filter(park=park).select_related('park', 'organizer')[:3],
+        'park_events': park_events,
+        'panel_event_total': len(park_events),
+        'in_park_panel': True,
+        'organize_url': reverse('event_create') + '?park=' + str(park.pk),
+        'close_panel_url': reverse('event_list') + '?' + close_params.urlencode(),
     }
 
 

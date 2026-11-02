@@ -312,17 +312,20 @@ class EventDiscoveryFeedTests(TestCase):
 
     def test_feed_shows_events_created_through_the_create_form(self):
         self.client.login(username='host@nyu.edu', password=PASSWORD)
-        self.client.post(reverse('event_create'), {
-            'title': 'Prospect Disc Toss',
-            'park': self.brooklyn_park.pk,
-            'meeting_spot': 'Long Meadow, north end',
-            'activity': Activity.ULTIMATE_FRISBEE,
-            'date': (self.today + datetime.timedelta(days=4)).isoformat(),
-            'time': '15:00',
-            'skill_level': SkillLevel.BEGINNER,
-            'capacity': '',
-            'description': 'Bring a disc if you have one.',
-        })
+        self.client.post(
+            reverse('event_create'),
+            {
+                'title': 'Prospect Disc Toss',
+                'park': self.brooklyn_park.pk,
+                'meeting_spot': 'Long Meadow, north end',
+                'activity': Activity.ULTIMATE_FRISBEE,
+                'date': (self.today + datetime.timedelta(days=4)).isoformat(),
+                'time': '15:00',
+                'skill_level': SkillLevel.BEGINNER,
+                'capacity': '',
+                'description': 'Bring a disc if you have one.',
+            },
+        )
         self.client.logout()
 
         response = self.client.get(reverse('event_list'))

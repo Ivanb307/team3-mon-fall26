@@ -1,4 +1,5 @@
 """US-2.9: filtered park panels reuse the park-page event list without extra per-row queries."""
+
 import datetime
 from html import unescape
 import re
@@ -20,15 +21,30 @@ class ParkPanelTests(TestCase):
     def setUpTestData(cls):
         cls.host = get_user_model().objects.create_user('panel-host', 'panel-host@example.test')
         cls.viewer = get_user_model().objects.create_user('panel-player', 'panel-player@example.test')
-        cls.park = Park.objects.create(gispropnum='PANEL1', name='Panel Park', borough='B',
-            address='Bedford Avenue', zipcode='11211, 11222', latitude=40.72, longitude=-73.95)
-        cls.other = Park.objects.create(gispropnum='PANEL2', name='Other Park', borough='M',
-            latitude=40.78, longitude=-73.96)
+        cls.park = Park.objects.create(
+            gispropnum='PANEL1',
+            name='Panel Park',
+            borough='B',
+            address='Bedford Avenue',
+            zipcode='11211, 11222',
+            latitude=40.72,
+            longitude=-73.95,
+        )
+        cls.other = Park.objects.create(
+            gispropnum='PANEL2', name='Other Park', borough='M', latitude=40.78, longitude=-73.96
+        )
         for index in range(2):
-            Facility.objects.create(system_id=f'PANEL-BKB-{index}', park=cls.park,
-                primary_sport='BKB', sports='basketball', is_lighted=True, is_accessible=index == 0)
-        Facility.objects.create(system_id='PANEL-INACTIVE', park=cls.park,
-            primary_sport='TNS', sports='tennis', feature_status='Inactive')
+            Facility.objects.create(
+                system_id=f'PANEL-BKB-{index}',
+                park=cls.park,
+                primary_sport='BKB',
+                sports='basketball',
+                is_lighted=True,
+                is_accessible=index == 0,
+            )
+        Facility.objects.create(
+            system_id='PANEL-INACTIVE', park=cls.park, primary_sport='TNS', sports='tennis', feature_status='Inactive'
+        )
 
     def setUp(self):
         self.now = datetime.datetime(2026, 10, 30, 12, tzinfo=NYC_TZ)
@@ -37,9 +53,17 @@ class ParkPanelTests(TestCase):
         self.addCleanup(clock.stop)
 
     def event(self, **changes):
-        data = dict(organizer=self.host, park=self.park, title='Panel pickup', activity='basketball',
-            date=self.now.date() + datetime.timedelta(days=1), time=datetime.time(15),
-            description='A friendly game', meeting_spot='Court 2', capacity=4)
+        data = dict(
+            organizer=self.host,
+            park=self.park,
+            title='Panel pickup',
+            activity='basketball',
+            date=self.now.date() + datetime.timedelta(days=1),
+            time=datetime.time(15),
+            description='A friendly game',
+            meeting_spot='Court 2',
+            capacity=4,
+        )
         data.update(changes)
         return Event.objects.create(**data)
 
@@ -47,13 +71,14 @@ class ParkPanelTests(TestCase):
         return self.client.get(reverse('explore_park_preview', args=[self.park.pk]) + '?' + query)
 
     def links(self, response):
-        return [(unescape(url), unescape(re.sub('<[^>]+>', '', text)).strip()) for url, text in re.findall(
-            r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', response.content.decode(), re.S)]
+        return [
+            (unescape(url), unescape(re.sub('<[^>]+>', '', text)).strip())
+            for url, text in re.findall(r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', response.content.decode(), re.S)
+        ]
 
     def test_facilities_and_address_use_active_grouped_data(self):
         response = self.panel()
-        for text in ('Panel Park', 'Brooklyn', 'Bedford Avenue', 'Basketball',
-                     '2 lit · 1 accessible', 'Not yet rated'):
+        for text in ('Panel Park', 'Brooklyn', 'Bedford Avenue', 'Basketball', '2 lit · 1 accessible', 'Not yet rated'):
             self.assertContains(response, text)
         self.assertNotContains(response, 'Tennis')
         self.assertEqual(response.context['facility_groups'][0]['count'], 2)
@@ -79,9 +104,14 @@ class ParkPanelTests(TestCase):
 
     def test_filters_agree_with_map_and_exclude_hidden_or_started_events(self):
         kept = self.event(title='Matching hoops')
-        for changes in ({'activity': 'tennis'}, {'status': 'cancelled'}, {'status': 'removed'},
-                        {'date': self.now.date(), 'time': datetime.time(11)}, {'park': self.other},
-                        {'skill_level': 'competitive'}):
+        for changes in (
+            {'activity': 'tennis'},
+            {'status': 'cancelled'},
+            {'status': 'removed'},
+            {'date': self.now.date(), 'time': datetime.time(11)},
+            {'park': self.other},
+            {'skill_level': 'competitive'},
+        ):
             self.event(title='Filtered away', **changes)
         query = f'park={self.park.pk}&sport=basketball&zip=11222&skill=beginner'
         response = self.panel(query)
@@ -92,16 +122,18 @@ class ParkPanelTests(TestCase):
 
     def test_personal_scopes_keep_panel_map_and_list_membership_in_sync(self):
         self.client.force_login(self.viewer)
-        hosted = [self.event(title=f'Hosted {status}', organizer=self.viewer, status=status)
-                  for status in ('scheduled', 'cancelled', 'removed')]
-        attending = [self.event(title=f'Attending {status}', status=status)
-                     for status in ('scheduled', 'cancelled', 'removed')]
+        hosted = [
+            self.event(title=f'Hosted {status}', organizer=self.viewer, status=status)
+            for status in ('scheduled', 'cancelled', 'removed')
+        ]
+        attending = [
+            self.event(title=f'Attending {status}', status=status) for status in ('scheduled', 'cancelled', 'removed')
+        ]
         for event in attending:
             RSVP.objects.create(event=event, user=self.viewer)
         self.event(title='Unrelated private event', status='cancelled')
         self.event(title='Different sport', organizer=self.viewer, activity='tennis', status='cancelled')
-        self.event(title='Started hosted event', organizer=self.viewer,
-                   date=self.now.date(), time=datetime.time(11))
+        self.event(title='Started hosted event', organizer=self.viewer, date=self.now.date(), time=datetime.time(11))
         started = self.event(title='Started attended event', date=self.now.date(), time=datetime.time(11))
         RSVP.objects.create(event=started, user=self.viewer)
 
@@ -246,6 +278,7 @@ class ParkPanelTests(TestCase):
             req = RequestFactory().get(reverse('explore_park_preview', args=[self.park.pk]))
             req.user = self.viewer
             return req
+
         self.event()
         with self.assertNumQueries(3):
             response = explore_park_preview(request(), self.park.pk)

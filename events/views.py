@@ -3,7 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -11,12 +11,20 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView, View
 
 from parks.models import Facility, Park
+from parks.views import facility_groups, with_availability
 
 from .forms import EventCreateForm
 from .hub import remember_explore
 from .models import Event, EventStatus, RSVP, RSVPStatus
-from .explore import (configure_filter_form, displayed_parks, facility_labels,
-                      filter_params, filter_pills, matching_events, parse_filters)
+from .explore import (
+    configure_filter_form,
+    displayed_parks,
+    facility_labels,
+    filter_params,
+    filter_pills,
+    matching_events,
+    parse_filters,
+)
 
 
 def filter_events(params, user=None):
@@ -30,8 +38,19 @@ def personal_scope_redirect(request, filters):
         return redirect_to_login(request.get_full_path())
 
 
-CLEARABLE_FILTERS = ('q', 'borough', 'zip', 'sport', 'facility', 'when', 'date_from', 'date_to', 'skill',
-                     'park', 'events_only')
+CLEARABLE_FILTERS = (
+    'q',
+    'borough',
+    'zip',
+    'sport',
+    'facility',
+    'when',
+    'date_from',
+    'date_to',
+    'skill',
+    'park',
+    'events_only',
+)
 
 
 def clear_filters_url(filters):
@@ -50,8 +69,11 @@ def explore_empty_state(filters, event_total, park_total, has_park_data):
     if not has_park_data:
         return 'no_park_data', 'no_park_data'
     # "Only parks with events" can only be switched off on the All events scope.
-    no_parks = ('events_only_empty' if filters['events_only'] and filters['scope'] == 'all' and not event_total
-                else 'no_matches')
+    no_parks = (
+        'events_only_empty'
+        if filters['events_only'] and filters['scope'] == 'all' and not event_total
+        else 'no_matches'
+    )
     map_state = no_parks if not park_total else None
     if filters['tab'] == 'parks':
         return (no_parks if not park_total else None), map_state
@@ -78,9 +100,13 @@ class EventListView(ListView):
     def get_queryset(self):
         if self.filters['tab'] == 'parks':
             return displayed_parks(self.filters, self.request.user).prefetch_related(
-                Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active')))
-        return matching_events(self.filters, self.request.user).with_confirmed_players().select_related(
-            'park', 'organizer')
+                Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active'))
+            )
+        return (
+            matching_events(self.filters, self.request.user)
+            .with_confirmed_players()
+            .select_related('park', 'organizer')
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -95,17 +121,31 @@ class EventListView(ListView):
             for park in context['parks']:
                 park.facility_labels = facility_labels(park)
                 park.details_url = park_details_url(park)
-        context.update(filters=self.filters, filter_form=self.filter_form, filter_pills=filter_pills(self.filters),
-            explore_params=params, map_url=reverse('event_map_api') + '?' + params.urlencode(),
+        context.update(
+            filters=self.filters,
+            filter_form=self.filter_form,
+            filter_pills=filter_pills(self.filters),
+            explore_params=params,
+            map_url=reverse('event_map_api') + '?' + params.urlencode(),
             event_total=matching_events(self.filters, self.request.user).count(),
-            park_total=displayed_parks(self.filters, self.request.user).count())
+            park_total=displayed_parks(self.filters, self.request.user).count(),
+        )
         has_park_data = Park.objects.filter(is_retired=False).exists()
         list_state, map_state = explore_empty_state(
-            self.filters, context['event_total'], context['park_total'], has_park_data)
-        context.update(has_park_data=has_park_data, empty_state=list_state, map_empty_state=map_state,
-                       clear_filters_url=clear_filters_url(self.filters))
+            self.filters, context['event_total'], context['park_total'], has_park_data
+        )
+        context.update(
+            has_park_data=has_park_data,
+            empty_state=list_state,
+            map_empty_state=map_state,
+            clear_filters_url=clear_filters_url(self.filters),
+        )
         if panel:
-            selected = displayed_parks(self.filters, self.request.user).prefetch_related('facilities').first()
+            selected = (
+                displayed_parks(self.filters, self.request.user)
+                .prefetch_related(Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active')))
+                .first()
+            )
             if selected:
                 context.update(park_preview_context(selected, self.filters, self.request.user))
                 context['selected_park'] = selected
@@ -157,23 +197,39 @@ def event_map_api(request):
     if redirect:
         return redirect
     parks = displayed_parks(filters, request.user).exclude(latitude=None).exclude(longitude=None)
-    results = [{'id': p.pk, 'name': p.name, 'borough': p.get_borough_display(),
-                'lat': float(p.latitude), 'lng': float(p.longitude), 'event_count': p.event_count,
-                'preview_url': reverse('explore_park_preview', kwargs={'pk': p.pk})}
-               for p in parks]
-    unmapped = matching_events(filters, request.user).filter(
-        Q(park__latitude__isnull=True) | Q(park__longitude__isnull=True)).count()
+    results = [
+        {
+            'id': p.pk,
+            'name': p.name,
+            'borough': p.get_borough_display(),
+            'lat': float(p.latitude),
+            'lng': float(p.longitude),
+            'event_count': p.event_count,
+            'preview_url': reverse('explore_park_preview', kwargs={'pk': p.pk}),
+        }
+        for p in parks
+    ]
+    unmapped = (
+        matching_events(filters, request.user)
+        .filter(Q(park__latitude__isnull=True) | Q(park__longitude__isnull=True))
+        .count()
+    )
     return JsonResponse({'parks': results, 'unmapped_event_count': unmapped})
 
 
 @require_GET
 def explore_park_preview(request, pk):
-    """Small read-only preview; the full park panel/detail stories can reuse this engine."""
+    """Read-only park panel using the same validated membership as Explore (US-2.9)."""
     _, filters = parse_filters(request.GET)
     redirect = personal_scope_redirect(request, filters)
     if redirect:
         return redirect
-    park = get_object_or_404(displayed_parks(filters, request.user).prefetch_related('facilities'), pk=pk)
+    park = get_object_or_404(
+        displayed_parks(filters, request.user).prefetch_related(
+            Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active'))
+        ),
+        pk=pk,
+    )
     return render(request, 'events/includes/park_preview.html', park_preview_context(park, filters, request.user))
 
 
@@ -182,10 +238,28 @@ def park_preview_context(park, filters, user):
     params['park'] = str(park.pk)
     params['view'] = 'list'
     params['tab'] = 'events'
+    events = (
+        matching_events(filters, user).filter(park=park).with_confirmed_players().select_related('organizer__profile')
+    )
+    if user.is_authenticated:
+        events = events.annotate(
+            viewer_attending=Exists(RSVP.objects.filter(event_id=OuterRef('pk'), user=user, status=RSVPStatus.ACTIVE))
+        )
+    park_events = with_availability(events)
+    for event in park_events:
+        event.viewer_hosting = user.is_authenticated and event.organizer_id == user.pk
+    close_params = filter_params(filters)
+    close_params.pop('park', None)
     return {
-        'park': park, 'facilities': facility_labels(park), 'details_url': park_details_url(park),
+        'park': park,
+        'facility_groups': facility_groups(park.facilities.all()),
+        'details_url': park_details_url(park),
         'events_url': reverse('event_list') + '?' + params.urlencode(),
-        'preview_events': matching_events(filters, user).filter(park=park).select_related('park', 'organizer')[:3],
+        'park_events': park_events,
+        'panel_event_total': len(park_events),
+        'in_park_panel': True,
+        'organize_url': reverse('event_create') + '?park=' + str(park.pk),
+        'close_panel_url': reverse('event_list') + '?' + close_params.urlencode(),
     }
 
 
@@ -273,16 +347,12 @@ class EventDetailView(DetailView):
             can_cancel_event=can_manage and event_block_reason is None,
             active_rsvps=active_rsvps,
             confirmed_players=confirmed_players,
-            spots_remaining=(
-                None if event.capacity is None
-                else max(event.capacity - confirmed_players, 0)
-            ),
+            spots_remaining=(None if event.capacity is None else max(event.capacity - confirmed_players, 0)),
             user_rsvp=user_rsvp,
             rsvp_block_reason=reason,
             event_block_reason=event_block_reason,
             show_rsvp_block_reason=(
-                reason is not None
-                and (user_rsvp is None or user_rsvp.status != RSVPStatus.ACTIVE)
+                reason is not None and (user_rsvp is None or user_rsvp.status != RSVPStatus.ACTIVE)
             ),
             can_rsvp=(
                 self.request.user.is_authenticated

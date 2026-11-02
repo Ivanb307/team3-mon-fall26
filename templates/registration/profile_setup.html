@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}{% if is_edit %}Profile settings{% else %}Complete your profile{% endif %} · NYC Active{% endblock %}
+{% block title %}{% if is_edit %}Edit profile{% else %}Complete your profile{% endif %} · NYC Active{% endblock %}
 {% block body_class %}page--plain{% endblock %}
 
 {% block content %}
+{% if is_edit %}{% include "accounts/_profile_toggle.html" with active="edit" %}{% endif %}
 <div class="profile-settings">
   <header class="profile-settings-header">
     <div>
-      <h1 class="profile-settings-title">{% if is_edit %}Profile settings{% else %}Complete your profile{% endif %}</h1>
+      <h1 class="profile-settings-title">{% if is_edit %}Edit profile{% else %}Complete your profile{% endif %}</h1>
       <p class="profile-settings-subtitle">
         {% if is_edit %}
           Your photo, username, bio, borough, sports and skill level show on your public profile.
@@ -17,16 +18,13 @@
         {% endif %}
       </p>
     </div>
-    {% if is_edit %}
-      <a class="btn btn--ghost" id="profile-edit-button" href="{% url 'edit_profile' %}?edit=1"{% if editing %} hidden{% endif %}>Edit</a>
-    {% endif %}
   </header>
 
   {% include "includes/form_errors.html" %}
 
   <form method="post" class="auth-form" autocomplete="off" enctype="multipart/form-data">
     {% csrf_token %}
-    <fieldset class="profile-fieldset" id="profile-fieldset"{% if not editing %} disabled{% endif %}>
+    <fieldset class="profile-fieldset" id="profile-fieldset">
       {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
       {% with saved_avatar=form.initial.avatar %}
       <div class="profile-photo{% if form.avatar.errors %} field--error{% endif %}">
@@ -103,9 +101,9 @@
       </section>
     </fieldset>
 
-    <div class="profile-settings-actions" id="profile-settings-actions"{% if not editing %} hidden{% endif %}>
+    <div class="profile-settings-actions" id="profile-settings-actions">
       {% if is_edit %}
-        <a class="btn btn--ghost" href="{% url 'edit_profile' %}">Cancel</a>
+        <a class="btn btn--ghost" href="{% url 'public_profile' username=user.username %}">Cancel</a>
         <button type="submit" class="btn btn--primary">Save changes</button>
       {% else %}
         <a class="btn btn--ghost" href="{% url 'home' %}">Skip for now</a>
@@ -119,5 +117,4 @@
 {% block scripts %}
 <script src="{% static 'js/sport-picker.js' %}" defer></script>
 <script src="{% static 'js/profile-photo.js' %}" defer></script>
-<script src="{% static 'js/profile-settings.js' %}" defer></script>
 {% endblock %}

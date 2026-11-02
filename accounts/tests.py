@@ -177,7 +177,7 @@ class RegisterTests(TestCase):
 
         response = self.client.get(reverse('edit_profile'))
 
-        self.assertContains(response, '<h1 class="profile-settings-title">Profile settings</h1>', html=True)
+        self.assertContains(response, '<h1 class="profile-settings-title">Edit profile</h1>', html=True)
         self.assertContains(response, 'value="TrackStar"')
         self.assertContains(response, 'value="Taylor"')
         self.assertContains(response, 'value="Runner"')
@@ -204,7 +204,7 @@ class RegisterTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse('edit_profile'))
+        self.assertRedirects(response, reverse('public_profile', args=['NewPublicName']))
         user.refresh_from_db()
         self.assertEqual(user.username, 'NewPublicName')
         self.assertEqual(user.first_name, 'Jordan')
@@ -471,8 +471,9 @@ class LandingLinksTests(TestCase):
         create_link = f'class="btn btn--primary" href="{reverse("event_create")}">Create event</a>'
         self.assertContains(response, create_link, count=2)
         profile_url = reverse('public_profile', args=['parkfan'])
-        self.assertContains(response, f'href="{profile_url}">View profile</a>')
-        self.assertContains(response, f'href="{reverse("edit_profile")}">Profile settings</a>')
+        self.assertContains(response, f'href="{profile_url}">Profile</a>')
+        self.assertNotContains(response, 'Profile settings</a>')
+        self.assertNotContains(response, 'View profile</a>')
         self.assertContains(response, '>Log out</button>')
 
     def test_account_menu_shows_name_role_and_photo_placeholder(self):
@@ -564,7 +565,7 @@ class ProfilePhotoTests(TestCase):
     def test_uploaded_photo_is_saved_as_a_square_jpeg_with_a_random_name(self):
         response = self.post_profile(avatar=make_photo((800, 600)))
 
-        self.assertRedirects(response, reverse('edit_profile'))
+        self.assertRedirects(response, reverse('public_profile', args=['parkfan']))
         avatar = self.saved_avatar()
         self.assertTrue(avatar.name.startswith('avatars/'))
         self.assertNotIn('my-photo', avatar.name)
@@ -757,29 +758,31 @@ class PublicProfileTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def edit_button(self):
-        return f'<a class="btn btn--ghost" href="{reverse("edit_profile")}?edit=1">Edit profile</a>'
+    def assertNoEditControls(self, response):
+        self.assertNotContains(response, 'aria-label="Profile"')
+        self.assertNotContains(response, f'href="{reverse("edit_profile")}"')
 
     def test_logged_out_visitors_can_view_but_not_edit(self):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, '>Edit profile</a>')
+        self.assertNoEditControls(response)
 
-    def test_other_members_see_no_edit_button(self):
+    def test_other_members_see_no_toggle_or_edit_control(self):
         viewer = User.objects.create_user('viewer', 'viewer@nyu.edu', PASSWORD)
         self.client.force_login(viewer)
 
         response = self.client.get(self.url)
 
-        self.assertNotContains(response, self.edit_button(), html=True)
+        self.assertNoEditControls(response)
 
-    def test_own_profile_has_edit_button(self):
+    def test_own_profile_shows_the_toggle_on_view(self):
         self.client.force_login(self.member)
 
         response = self.client.get(self.url)
 
-        self.assertContains(response, self.edit_button(), html=True)
+        self.assertContains(response, f'<a href="{self.url}" aria-current="page">View</a>', html=True)
+        self.assertContains(response, f'<a href="{reverse("edit_profile")}">Edit</a>', html=True)
 
     def test_account_menu_shows_own_photo(self):
         self.client.force_login(self.member)
@@ -796,7 +799,7 @@ class PublicProfileTests(TestCase):
 
         response = self.client.get(self.url)
 
-        self.assertContains(response, f'href="{self.url}">View profile</a>')
+        self.assertContains(response, f'href="{self.url}">Profile</a>')
 
     def test_saved_edits_show_on_the_public_profile(self):
         self.client.force_login(self.member)
@@ -810,9 +813,9 @@ class PublicProfileTests(TestCase):
             follow=True,
         )
 
-        self.assertRedirects(response, reverse('edit_profile'))
+        self.assertRedirects(response, self.url)
         self.assertContains(response, 'Profile details saved.')
-        self.assertContains(self.client.get(self.url), 'Now playing pickleball too.')
+        self.assertContains(response, 'Now playing pickleball too.')
 
     def test_first_time_setup_still_goes_home(self):
         self.client.force_login(self.member)
@@ -822,48 +825,171 @@ class PublicProfileTests(TestCase):
         self.assertRedirects(response, reverse('home'))
 
 
-class ProfileSettingsTests(TestCase):
+class ProfileToggleTests(TestCase):
+    """One Profile page with a View / Edit toggle (own profile only)."""
+
+    FORM = {
+        'display_username': 'parkfan',
+        'first_name': 'Park',
+        'last_name': 'Fan',
+        'bio': 'Hoops on weekends.',
+        'home_borough': 'B',
+        'favorite_sports': ['Basketball'],
+        'skill_level': 'beginner',
+    }
+
     def setUp(self):
-        self.user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD)
-        Profile.objects.create(user=self.user, display_username='parkfan', bio='Hoops on weekends.')
+        self.user = User.objects.create_user('parkfan', 'parkfan@nyu.edu', PASSWORD, first_name='Park', last_name='Fan')
+        Profile.objects.create(
+            user=self.user,
+            display_username='parkfan',
+            bio='Hoops on weekends.',
+            home_borough='B',
+            favorite_sports=['Basketball'],
+            skill_level='beginner',
+        )
         self.client.force_login(self.user)
-        self.url = reverse('edit_profile')
+        self.edit_url = reverse('edit_profile')
+        self.view_url = reverse('public_profile', args=['parkfan'])
 
-    def test_settings_open_read_only_with_an_edit_button(self):
-        response = self.client.get(self.url)
+    def toggle(self, response, active):
+        view_current = ' aria-current="page"' if active == 'view' else ''
+        edit_current = ' aria-current="page"' if active == 'edit' else ''
+        self.assertContains(response, f'<a href="{self.view_url}"{view_current}>View</a>', html=True)
+        self.assertContains(response, f'<a href="{self.edit_url}"{edit_current}>Edit</a>', html=True)
 
-        self.assertFalse(response.context['editing'])
-        self.assertContains(response, 'id="profile-fieldset" disabled>')
-        self.assertContains(response, f'href="{self.url}?edit=1">Edit</a>')
-        self.assertContains(response, 'id="profile-settings-actions" hidden>')
+    def snapshot(self):
+        self.user.refresh_from_db()
+        profile = Profile.objects.get(user=self.user)
+        return (
+            self.user.username,
+            self.user.first_name,
+            profile.display_username,
+            profile.bio,
+            profile.home_borough,
+            profile.favorite_sports,
+            profile.skill_level,
+        )
+
+    # Scenario: Opening my profile
+    def test_account_menu_profile_link_opens_own_profile_with_view_selected(self):
+        home = self.client.get(reverse('home'))
+        self.assertContains(
+            home,
+            f'<a class="account-menu-item account-menu-item--profile" href="{self.view_url}">' 'Profile</a>',
+            html=True,
+        )
+        self.toggle(self.client.get(self.view_url), 'view')
+
+    # Scenario: Switching to Edit
+    def test_edit_opens_editable_with_edit_selected_and_no_read_only_step(self):
+        response = self.client.get(self.edit_url)
+
+        self.toggle(response, 'edit')
+        self.assertContains(response, '<fieldset class="profile-fieldset" id="profile-fieldset">')
+        self.assertNotContains(response, ' disabled')
+        self.assertNotContains(response, 'id="profile-settings-actions" hidden')
+        self.assertNotContains(response, 'profile-settings.js')
+        self.assertNotContains(response, 'edit=1')
+        self.assertContains(response, '>Save changes</button>')
+        self.assertContains(response, 'value="parkfan"')
         self.assertContains(response, 'Hoops on weekends.')
 
-    def test_edit_param_unlocks_the_fields(self):
-        response = self.client.get(f'{self.url}?edit=1')
-
-        self.assertTrue(response.context['editing'])
-        self.assertContains(response, 'id="profile-fieldset">')
-        self.assertContains(response, f'href="{self.url}?edit=1" hidden>Edit</a>')
-        self.assertContains(response, '>Save changes</button>')
-        self.assertContains(response, f'<a class="btn btn--ghost" href="{self.url}">Cancel</a>', html=True)
-
-    def test_form_with_errors_stays_editable(self):
-        response = self.client.post(self.url, {'display_username': ''})
+    def test_old_edit_param_still_opens_the_editable_form(self):
+        response = self.client.get(f'{self.edit_url}?edit=1')
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['editing'])
-        self.assertContains(response, 'id="profile-fieldset">')
+        self.toggle(response, 'edit')
+        self.assertNotContains(response, ' disabled')
 
-    def test_first_time_setup_is_editable_without_an_edit_button(self):
+    # Scenario: Saving
+    def test_saving_returns_to_view_with_message_and_changes(self):
+        response = self.client.post(self.edit_url, {**self.FORM, 'bio': 'Now playing pickleball too.'}, follow=True)
+
+        self.assertRedirects(response, self.view_url)
+        self.assertContains(response, 'Profile details saved.')
+        self.assertContains(response, 'Now playing pickleball too.')
+        self.toggle(response, 'view')
+
+    def test_changing_username_lands_on_the_new_profile_url(self):
+        response = self.client.post(self.edit_url, {**self.FORM, 'display_username': 'CourtKing'}, follow=True)
+
+        new_url = reverse('public_profile', args=['CourtKing'])
+        self.assertRedirects(response, new_url)
+        self.assertContains(response, '@CourtKing')
+        self.assertContains(response, f'<a href="{new_url}" aria-current="page">View</a>', html=True)
+        self.assertEqual(self.client.get(self.view_url).status_code, 404)
+
+    # Scenario: Cancelling or invalid input
+    def test_view_and_cancel_go_back_to_view_without_changes(self):
+        before = self.snapshot()
+        response = self.client.get(self.edit_url)
+
+        self.assertContains(response, f'<a class="btn btn--ghost" href="{self.view_url}">Cancel</a>', html=True)
+        self.assertEqual(self.client.get(self.view_url).status_code, 200)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_invalid_input_stays_in_edit_with_errors_and_nothing_saved(self):
+        before = self.snapshot()
+        for bad in ({'display_username': ''}, {'display_username': 'bad name!'}, {'skill_level': 'wizard'}):
+            with self.subTest(bad=bad):
+                response = self.client.post(self.edit_url, {**self.FORM, 'bio': 'Changed?', **bad})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context['form'].errors)
+                self.toggle(response, 'edit')
+                self.assertNotContains(response, ' disabled')
+                self.assertEqual(self.snapshot(), before)
+
+    def test_username_taken_at_save_time_keeps_menu_and_view_on_the_saved_username(self):
+        before = self.snapshot()
+        with patch.object(Profile, 'save', side_effect=IntegrityError):
+            response = self.client.post(self.edit_url, {**self.FORM, 'display_username': 'Taken', 'first_name': 'X'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('display_username', response.context['form'].errors)
+        self.toggle(response, 'edit')
+        self.assertContains(response, f'href="{self.view_url}">Profile</a>')
+        self.assertEqual(self.snapshot(), before)
+
+    # Scenario: Other members' profiles (see PublicProfileTests for logged-out and other viewers)
+    def test_toggle_only_on_own_profile(self):
+        User.objects.create_user('neighbor', 'neighbor@nyu.edu', PASSWORD)
+        response = self.client.get(reverse('public_profile', args=['neighbor']))
+
+        self.assertNotContains(response, 'aria-label="Profile"')
+        self.assertNotContains(response, f'href="{self.edit_url}"')
+
+    def test_profile_url_is_case_insensitive_and_still_shows_the_toggle(self):
+        response = self.client.get(reverse('public_profile', args=['PARKFAN']))
+
+        self.toggle(response, 'view')
+
+    # Scenario: Access and old links
+    def test_anonymous_edit_goes_to_login_and_back_to_edit(self):
+        self.client.logout()
+
+        response = self.client.get(self.edit_url)
+
+        login_url = f'{reverse("login")}?next={self.edit_url}'
+        self.assertRedirects(response, login_url)
+        response = self.client.post(login_url, {'username': 'parkfan@nyu.edu', 'password': PASSWORD})
+        self.assertRedirects(response, self.edit_url)
+
+    # First-time setup (US-1.9) is unchanged
+    def test_first_time_setup_has_no_toggle_and_skip_still_goes_home(self):
         response = self.client.get(reverse('register_profile'))
 
-        self.assertTrue(response.context['editing'])
-        self.assertNotContains(response, 'id="profile-edit-button"')
+        self.assertNotContains(response, 'aria-label="Profile"')
+        self.assertContains(response, 'Complete your profile')
+        self.assertContains(response, f'<a class="btn btn--ghost" href="{reverse("home")}">Skip for now</a>', html=True)
         self.assertContains(response, '>Save profile details</button>')
-        self.assertContains(response, '>Skip for now</a>')
+        self.assertNotContains(response, ' disabled')
+        response = self.client.post(reverse('register_profile'), self.FORM)
+        self.assertRedirects(response, reverse('home'))
 
     def test_settings_explain_which_fields_are_public(self):
-        response = self.client.get(self.url)
+        response = self.client.get(self.edit_url)
 
         self.assertContains(response, 'Your first and last name stay private.')
 

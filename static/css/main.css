@@ -1043,6 +1043,22 @@ a:focus-visible {
   color: var(--ink-2);
 }
 
+.event-cancelled-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+}
+
+.event-manage {
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
 /* Event discovery feed (#25) */
 
 .discover {

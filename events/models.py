@@ -173,6 +173,10 @@ class Event(models.Model):
         """The event title, or its sport for events created before titles existed."""
         return self.title or self.get_activity_display()
 
+    def can_be_managed_by(self, user):
+        """Only the organizer or an administrator may edit, cancel, or remove attendees (#27)."""
+        return user.is_authenticated and (user.pk == self.organizer_id or user.is_staff)
+
     def get_absolute_url(self):
         return reverse('event_detail', kwargs={'pk': self.pk})
 

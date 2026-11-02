@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    EventCancelView,
     EventCreateView,
     EventDetailView,
     EventListView,
@@ -19,5 +20,6 @@ urlpatterns = [
     path('events/create/', EventCreateView.as_view(), name='event_create'),
     path('events/<int:pk>/rsvp/', event_rsvp, name='event_rsvp'),
     path('events/<int:pk>/rsvp/cancel/', cancel_event_rsvp, name='event_rsvp_cancel'),
+    path('events/<int:pk>/cancel/', EventCancelView.as_view(), name='event_cancel'),
     path('events/<int:pk>/', EventDetailView.as_view(), name='event_detail'),
 ]

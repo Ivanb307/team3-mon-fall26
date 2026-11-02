@@ -6,6 +6,10 @@ dist: jammy
 python: "3.12"
 cache: pip
 
+env:
+  global:
+    - COVERALLS_SERVICE_NAME=travis-pro  # coveralls on travis-ci.com
+
 # Push builds for develop and main, plus every pull request into them.
 branches:
   only:

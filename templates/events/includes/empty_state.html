@@ -10,7 +10,7 @@
       <a class="btn btn--primary" href="{% url 'event_create' %}">Create Event</a>
     </p>
   {% elif state == 'no_my_events' %}
-    <h2>You have no upcoming events.</h2>
+    <h2>{% if filter_pills %}None of your events match your filters.{% else %}You have no upcoming events.{% endif %}</h2>
     <p class="explore-empty-actions">
       {% if filter_pills %}<a class="btn btn--ghost" href="{{ clear_filters_url }}">Clear filters</a>{% endif %}
       <a class="btn btn--ghost" href="{% explore_url scope=None events_only=None %}">Show all events</a>

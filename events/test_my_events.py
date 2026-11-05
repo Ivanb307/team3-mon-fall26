@@ -81,7 +81,7 @@ class MyEventsTests(TestCase):
 
     def test_cancelled_and_removed_events_stay_in_my_events_with_badges(self):
         self.client.force_login(self.me)
-        self.event(self.me, title='My cancelled game', status='cancelled')
+        self.event(self.me, players=1, title='My cancelled game', status='cancelled')
         removed = self.event(title='Removed game I joined', status='removed')
         RSVP.objects.create(event=removed, user=self.me)
 
@@ -90,6 +90,11 @@ class MyEventsTests(TestCase):
         self.assertContains(
             mine, '<span class="event-badge explore-status-badge">Removed by a moderator</span>', html=True
         )
+        # Games that aren't happening show that in place of players and spots.
+        self.assertContains(mine, '<span class="discover-spots discover-spots--ended">Cancelled</span>', html=True)
+        self.assertContains(mine, '<span class="discover-spots discover-spots--ended">Removed</span>', html=True)
+        self.assertNotContains(mine, 'players')
+        self.assertNotContains(mine, 'spots left')
 
         everyone = self.events_tab()
         self.assertNotContains(everyone, 'My cancelled game')
@@ -121,7 +126,10 @@ class MyEventsTests(TestCase):
 
         response = self.events_tab(scope='mine', sport='soccer')
 
-        found = links(empty_block(response.content.decode(), 'no_my_events'))
+        block = empty_block(response.content.decode(), 'no_my_events')
+        self.assertIn('None of your events match your filters.', block)
+        self.assertNotIn(NO_MY_EVENTS, block)
+        found = links(block)
         self.assertEqual(found['Clear filters'][1]['scope'], ['mine'])
         self.assertNotIn('sport', found['Clear filters'][1])
 

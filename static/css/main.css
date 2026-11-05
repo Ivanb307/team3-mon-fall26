@@ -1134,14 +1134,24 @@ a:focus-visible {
 
 .event-roster-avatar {
   display: inline-grid;
+  flex-shrink: 0;
   place-items: center;
   width: 26px;
   height: 26px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--green-900);
+  overflow: hidden;
   background: var(--green-50);
   border-radius: 50%;
+}
+
+.event-roster-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.event-roster-avatar .profile-photo-placeholder {
+  width: 14px;
+  height: 14px;
 }
 
 .event-roster-tag {

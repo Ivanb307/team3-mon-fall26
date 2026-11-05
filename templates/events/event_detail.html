@@ -22,7 +22,8 @@
     <div class="event-meta-item">
       <dt>Park Location</dt>
       <dd>
-        <strong><a href="{% url 'park_detail' event.park.pk %}">{{ event.park.name }}</a></strong> ({{ event.park.get_borough_display }})
+        {# Retired parks have no page (404), so their name stays plain text. #}
+        <strong>{% if event.park.is_retired %}{{ event.park.name }}{% else %}<a href="{% url 'park_detail' event.park.pk %}">{{ event.park.name }}</a>{% endif %}</strong> ({{ event.park.get_borough_display }})
         {% if event.park.location or event.park.address %}
           <span class="event-meta-sub">{{ event.park.location|default:event.park.address }}</span>
         {% endif %}
@@ -76,10 +77,14 @@
     {% endif %}
     <ul class="event-roster">
       {% if event.host_is_playing %}
-        <li class="event-roster-item"><span class="event-roster-avatar" aria-hidden="true">{{ event.organizer.username|first|upper }}</span>@{{ event.organizer.username }} <span class="event-roster-tag">Host</span></li>
+        {% include "events/includes/roster_chip.html" with member=event.organizer tag="Host" %}
       {% endif %}
       {% for rsvp in active_rsvps %}
-        <li class="event-roster-item"><span class="event-roster-avatar" aria-hidden="true">{{ rsvp.user.username|first|upper }}</span>@{{ rsvp.user.username }}{% if user.is_authenticated and rsvp.user_id == user.id %} <span class="event-roster-tag">You</span>{% endif %}</li>
+        {% if user.is_authenticated and rsvp.user_id == user.id %}
+          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="You" %}
+        {% else %}
+          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="" %}
+        {% endif %}
       {% empty %}
         {% if not event.host_is_playing %}<li class="event-roster-empty">No one has RSVP’d yet.</li>{% endif %}
       {% endfor %}

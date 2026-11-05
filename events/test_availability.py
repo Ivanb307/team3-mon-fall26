@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from accounts.models import Profile
 from parks.models import Park
 
 from .models import NYC_TZ, RSVP, Event, RSVPStatus
@@ -82,3 +83,22 @@ class EventAvailabilityTests(TestCase):
         response = self.client.get(self.event().get_absolute_url())
         park_url = reverse('park_detail', args=[self.park.pk])
         self.assertContains(response, f'<a href="{park_url}">Tompkins Square Park</a>')
+
+    def test_retired_park_name_is_not_linked(self):
+        retired = Park.objects.create(gispropnum='M10', name='Old Playground', borough='M', is_retired=True)
+        response = self.client.get(self.event(park=retired).get_absolute_url())
+        self.assertContains(response, '<strong>Old Playground</strong>', html=True)
+        self.assertNotContains(response, reverse('park_detail', args=[retired.pk]))
+
+    def test_going_list_shows_display_names_and_photos(self):
+        Profile.objects.create(user=self.host, display_username='CourtCaptain', avatar='avatars/captain.png')
+        Profile.objects.create(user=self.players[0], display_username='Hooper')
+        game = self.event(players=2)
+
+        response = self.client.get(game.get_absolute_url())
+
+        self.assertContains(response, '@CourtCaptain <span class="event-roster-tag">Host</span>')
+        self.assertContains(response, 'avatars/captain.png')
+        self.assertContains(response, '@Hooper</li>')
+        self.assertContains(response, '@spots-player1</li>', msg_prefix='No profile falls back to the username')
+        self.assertContains(response, 'class="profile-photo-placeholder"', count=2)

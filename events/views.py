@@ -330,12 +330,12 @@ class EventDetailView(DetailView):
     context_object_name = 'event'
 
     def get_queryset(self):
-        return Event.objects.with_confirmed_players().select_related('park', 'organizer')
+        return Event.objects.with_confirmed_players().select_related('park', 'organizer__profile')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         event = self.object
-        active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).select_related('user')
+        active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).select_related('user__profile')
         confirmed_players = event.confirmed_players
         user_rsvp = None
         if self.request.user.is_authenticated and self.request.user != event.organizer:

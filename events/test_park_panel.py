@@ -188,7 +188,7 @@ class ParkPanelTests(TestCase):
         RSVP.objects.create(event=cancelled_rsvp, user=self.viewer, status=RSVPStatus.CANCELLED)
         response = self.panel()
         self.assertContains(response, "You're attending", count=1)
-        self.assertContains(response, '>Hosting</span>', count=1)
+        self.assertContains(response, '>Host · Playing</span>', count=1)
         events = {e.pk: e for e in response.context['park_events']}
         self.assertEqual(events[attending.pk].spots_remaining, 0)
         self.assertIsNone(events[hosting.pk].spots_remaining)
@@ -199,7 +199,7 @@ class ParkPanelTests(TestCase):
         self.client.logout()
         anonymous = self.panel()
         self.assertNotContains(anonymous, "You're attending")
-        self.assertNotContains(anonymous, '>Hosting</span>')
+        self.assertNotContains(anonymous, '>Host · Playing</span>')
 
     def test_empty_state_invites_hosting_at_this_park(self):
         self.event(activity='tennis')

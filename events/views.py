@@ -121,6 +121,8 @@ class EventListView(ListView):
             for park in context['parks']:
                 park.facility_labels = facility_labels(park)
                 park.details_url = park_details_url(park)
+        else:
+            context['events'] = with_availability(context['object_list'])
         context.update(
             filters=self.filters,
             filter_form=self.filter_form,

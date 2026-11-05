@@ -22,7 +22,7 @@
     <div class="event-meta-item">
       <dt>Park Location</dt>
       <dd>
-        <strong>{{ event.park.name }}</strong> ({{ event.park.get_borough_display }})
+        <strong><a href="{% url 'park_detail' event.park.pk %}">{{ event.park.name }}</a></strong> ({{ event.park.get_borough_display }})
         {% if event.park.location or event.park.address %}
           <span class="event-meta-sub">{{ event.park.location|default:event.park.address }}</span>
         {% endif %}
@@ -75,7 +75,7 @@
     </ul>
     <p>
       {% if event.capacity %}
-        {% if spots_remaining %}{{ spots_remaining }} spot{{ spots_remaining|pluralize }} remaining{% else %}Full{% endif %}
+        {% if spots_remaining %}{{ spots_remaining }} spot{{ spots_remaining|pluralize }} left{% else %}Full{% endif %}
       {% else %}
         Unlimited spots
       {% endif %}

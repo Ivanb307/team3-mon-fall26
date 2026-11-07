@@ -13,6 +13,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
+from accounts.models import Profile
 from events.models import Event
 from events.views import EventListView
 
@@ -158,12 +159,15 @@ class ReviewSubmissionTests(ReviewTestCase):
 
 class ReviewListTests(ReviewTestCase):
     def test_public_list_is_park_scoped_newest_first_with_author_links_rating_and_date(self):
+        Profile.objects.create(user=self.writer, display_username='PublicParkWriter')
         older = self.review(body='Older court report.')
         newer = self.review(user=self.other_writer, rating=5, body='Newer lighting report.')
         self.review(park=self.other_park, body='A different park report.')
         response = self.client.get(self.url)
         self.assertEqual([review.pk for review in response.context['reviews_page']], [newer.pk, older.pk])
-        self.assertContains(response, f'href="{reverse("public_profile", kwargs={"username": self.writer.username})}"')
+        for user, display_name in ((self.writer, 'PublicParkWriter'), (self.other_writer, self.other_writer.username)):
+            profile_url = reverse('public_profile', kwargs={'username': user.username})
+            self.assertContains(response, f'<a href="{profile_url}">@{display_name}</a>', html=True)
         self.assertContains(response, '5 / 5 stars')
         self.assertContains(response, newer.created_at.strftime('%b'))
         self.assertNotContains(response, 'A different park report.')

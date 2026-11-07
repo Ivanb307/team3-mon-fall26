@@ -10,7 +10,7 @@ from django.views.generic import DetailView
 from events.models import Event
 
 from .forms import ReviewForm
-from .models import Facility, Park, Review
+from .models import Facility, Park
 
 REVIEW_EXISTS_MESSAGE = 'You have already reviewed this park.'
 
@@ -89,13 +89,10 @@ class ParkDetailView(DetailView):
         context.update(
             facility_groups=facility_groups(self.object.facilities.all()), park_events=with_availability(events)
         )
-        context['reviews_page'] = Paginator(self.object.reviews.select_related('user'), 10).get_page(
-            self.request.GET.get('reviews_page')
-        )
+        reviews = self.object.reviews.select_related('user__profile')
+        context['reviews_page'] = Paginator(reviews, 10).get_page(self.request.GET.get('reviews_page'))
         context['own_review'] = (
-            Review.objects.filter(park=self.object, user=self.request.user).first()
-            if self.request.user.is_authenticated
-            else None
+            reviews.filter(user=self.request.user).first() if self.request.user.is_authenticated else None
         )
         context.setdefault('review_form', ReviewForm())
         return context

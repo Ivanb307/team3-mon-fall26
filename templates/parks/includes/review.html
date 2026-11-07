@@ -1,6 +1,6 @@
 <article class="park-review">
   <header class="park-review-header">
-    <a href="{% url 'public_profile' username=review.user.username %}">@{{ review.user.username }}</a>
+    <a href="{% url 'public_profile' username=review.user.username %}">@{{ review.user.profile.display_username|default:review.user.username }}</a>
     <span class="park-review-rating">{{ review.rating }} / 5 stars</span>
     <time datetime="{{ review.created_at|date:'c' }}">{{ review.created_at|date:"M j, Y" }}</time>
   </header>

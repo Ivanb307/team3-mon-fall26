@@ -1290,6 +1290,34 @@ a:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.event-discussion-form {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.event-discussion-form label {
+  font-weight: 600;
+}
+
+.event-discussion-form textarea {
+  width: min(100%, 680px);
+  min-height: 100px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.event-discussion-login,
+.event-discussion-closed {
+  margin: 16px 0 0;
+  font-weight: 600;
+}
+
 .event-manage {
   padding-top: 20px;
   margin-top: 20px;

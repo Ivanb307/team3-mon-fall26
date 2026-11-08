@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView, View
@@ -16,7 +17,7 @@ from parks.views import facility_groups, with_availability
 from .forms import EventCreateForm
 from .hosting import HostPlayingError, set_host_playing
 from .hub import remember_explore
-from .models import Event, EventStatus, Message, RSVP, RSVPStatus
+from .models import Event, EventStatus, MESSAGE_MAX_LENGTH, Message, RSVP, RSVPStatus
 from .explore import (
     configure_filter_form,
     displayed_parks,
@@ -385,6 +386,7 @@ class EventDetailView(DetailView):
         event = self.object
         active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).select_related('user__profile')
         discussion_messages = Message.objects.filter(event=event).select_related('author__profile')
+        latest_discussion_message_id = discussion_messages.order_by('-pk').values_list('pk', flat=True).first() or 0
         announcement_messages = discussion_messages.filter(author=event.organizer, is_announcement=True).order_by(
             '-created_at', '-pk'
         )
@@ -418,6 +420,9 @@ class EventDetailView(DetailView):
             announcement_messages=announcement_messages,
             regular_messages=regular_messages,
             has_discussion_messages=announcement_messages.exists() or regular_messages.exists(),
+            latest_discussion_message_id=latest_discussion_message_id,
+            can_post_message=event.status == EventStatus.SCHEDULED,
+            message_max_length=MESSAGE_MAX_LENGTH,
             confirmed_players=confirmed_players,
             spots_remaining=(None if event.capacity is None else max(event.capacity - confirmed_players, 0)),
             user_rsvp=user_rsvp,
@@ -434,6 +439,82 @@ class EventDetailView(DetailView):
             ),
         )
         return context
+
+
+@require_POST
+def post_event_message(request, pk):
+    event_url = reverse('event_detail', kwargs={'pk': pk})
+    wants_json = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    if not request.user.is_authenticated:
+        if wants_json:
+            return JsonResponse({'error': 'Please log in to join the discussion.'}, status=401)
+        return redirect_to_login(event_url)
+
+    with transaction.atomic():
+        event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+        if event.status != EventStatus.SCHEDULED:
+            error = 'Discussion is closed for this event.'
+            if wants_json:
+                return JsonResponse({'error': error}, status=409)
+            messages.error(request, error)
+        else:
+            body = request.POST.get('body', '').strip()
+            if not body:
+                error = 'Message cannot be blank.'
+                if wants_json:
+                    return JsonResponse({'error': error}, status=400)
+                messages.error(request, error)
+            elif len(body) > MESSAGE_MAX_LENGTH:
+                error = f'Message cannot exceed {MESSAGE_MAX_LENGTH} characters.'
+                if wants_json:
+                    return JsonResponse({'error': error}, status=400)
+                messages.error(request, error)
+            else:
+                message = Message.objects.create(event=event, author=request.user, body=body)
+                if wants_json:
+                    message = Message.objects.select_related('author__profile').get(pk=message.pk)
+                    return JsonResponse(
+                        {
+                            'html': render_to_string(
+                                'events/includes/event_message.html',
+                                {'message': message},
+                                request=request,
+                            ),
+                            'id': message.pk,
+                        }
+                    )
+    return redirect(event_url)
+
+
+@require_GET
+def event_discussion_updates(request, pk):
+    event = get_object_or_404(Event, pk=pk)
+    try:
+        after_id = max(int(request.GET.get('after', '0')), 0)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid message cursor.'}, status=400)
+
+    messages = (
+        Message.objects.filter(event=event, pk__gt=after_id).select_related('author__profile').order_by('pk')[:100]
+    )
+    results = []
+    latest_id = after_id
+    for message in messages:
+        is_announcement = message.author_id == event.organizer_id and message.is_announcement
+        results.append(
+            {
+                'id': message.pk,
+                'is_announcement': is_announcement,
+                'html': render_to_string(
+                    'events/includes/event_message.html',
+                    {'message': message, 'is_announcement': is_announcement},
+                    request=request,
+                ),
+            }
+        )
+        latest_id = message.pk
+
+    return JsonResponse({'messages': results, 'latest_id': latest_id})
 
 
 def join_block_reason(event, rsvp):

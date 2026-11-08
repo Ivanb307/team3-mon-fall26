@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ event.display_title }} at {{ event.park.name }} · NYC Active{% endblock %}
 
@@ -143,3 +144,5 @@
   {% endif %}
 </article>
 {% endblock %}
+
+{% block scripts %}{{ block.super }}<script src="{% static 'js/event-discussion.js' %}" defer></script>{% endblock %}

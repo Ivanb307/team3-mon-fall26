@@ -16,7 +16,7 @@ from parks.views import facility_groups, with_availability
 from .forms import EventCreateForm
 from .hosting import HostPlayingError, set_host_playing
 from .hub import remember_explore
-from .models import Event, EventStatus, RSVP, RSVPStatus
+from .models import Event, EventStatus, Message, RSVP, RSVPStatus
 from .explore import (
     configure_filter_form,
     displayed_parks,
@@ -364,6 +364,13 @@ class EventDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         event = self.object
         active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).select_related('user__profile')
+        discussion_messages = Message.objects.filter(event=event).select_related('author__profile')
+        announcement_messages = discussion_messages.filter(
+            author=event.organizer, is_announcement=True
+        ).order_by('-created_at', '-pk')
+        regular_messages = discussion_messages.exclude(
+            author=event.organizer, is_announcement=True
+        ).order_by('created_at', 'pk')
         confirmed_players = event.confirmed_players
         user_rsvp = None
         if self.request.user.is_authenticated and self.request.user != event.organizer:
@@ -388,6 +395,9 @@ class EventDetailView(DetailView):
             can_manage=can_manage,
             can_cancel_event=can_manage and event_block_reason is None,
             active_rsvps=active_rsvps,
+            announcement_messages=announcement_messages,
+            regular_messages=regular_messages,
+            has_discussion_messages=announcement_messages.exists() or regular_messages.exists(),
             confirmed_players=confirmed_players,
             spots_remaining=(None if event.capacity is None else max(event.capacity - confirmed_players, 0)),
             user_rsvp=user_rsvp,

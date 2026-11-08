@@ -1,0 +1,15 @@
+<section class="event-discussion" aria-labelledby="event-discussion-title">
+  <h2 id="event-discussion-title">Discussion</h2>
+  {% if has_discussion_messages %}
+    <ol class="event-discussion-list">
+      {% for message in announcement_messages %}
+        {% include "events/includes/event_message.html" with message=message is_announcement=True %}
+      {% endfor %}
+      {% for message in regular_messages %}
+        {% include "events/includes/event_message.html" with message=message %}
+      {% endfor %}
+    </ol>
+  {% else %}
+    <p class="event-discussion-empty">No messages yet. Ask a question below!</p>
+  {% endif %}
+</section>

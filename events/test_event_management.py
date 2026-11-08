@@ -104,9 +104,7 @@ class EventParticipantRemovalTests(EventManagementTestCase):
     def setUp(self):
         super().setUp()
         self.rsvp = RSVP.objects.create(event=self.event, user=self.player)
-        self.url = reverse(
-            'event_participant_remove', kwargs={'pk': self.event.pk, 'rsvp_pk': self.rsvp.pk}
-        )
+        self.url = reverse('event_participant_remove', kwargs={'pk': self.event.pk, 'rsvp_pk': self.rsvp.pk})
 
     def test_organizer_removes_active_participant_without_deleting_rsvp(self):
         self.client.force_login(self.host)

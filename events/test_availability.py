@@ -100,7 +100,9 @@ class EventAvailabilityTests(TestCase):
         self.assertContains(response, f'href="{reverse("public_profile", kwargs={"username": self.host.username})}"')
         self.assertContains(response, '@CourtCaptain</a> <span class="event-roster-tag">Host · Playing</span>')
         self.assertContains(response, 'avatars/captain.png')
-        self.assertContains(response, f'href="{reverse("public_profile", kwargs={"username": self.players[0].username})}"')
+        self.assertContains(
+            response, f'href="{reverse("public_profile", kwargs={"username": self.players[0].username})}"'
+        )
         self.assertContains(response, '@Hooper</a>')
         self.assertContains(
             response,

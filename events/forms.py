@@ -17,11 +17,13 @@ class EventCreateForm(forms.ModelForm):
     capacity = forms.IntegerField(
         required=False,
         label='Participant limit (optional)',
-        help_text='Leave blank for unlimited participants, or enter at least 1.',
+        # US-3.3 (#24): the limit counts everyone playing, including the host when they play (US-3.10).
+        help_text="Total players, including you if you're playing. Leave blank for unlimited.",
         widget=forms.NumberInput(
             attrs={
                 'placeholder': 'Unlimited',
                 'data-capacity-input': 'true',
+                'data-capacity-max': MAX_CAPACITY,
             }
         ),
         error_messages={
@@ -31,7 +33,18 @@ class EventCreateForm(forms.ModelForm):
 
     class Meta:
         model = Event
-        fields = ('title', 'park', 'meeting_spot', 'activity', 'date', 'time', 'skill_level', 'capacity', 'description')
+        fields = (
+            'title',
+            'park',
+            'meeting_spot',
+            'activity',
+            'date',
+            'time',
+            'skill_level',
+            'capacity',
+            'host_is_playing',
+            'description',
+        )
         labels = {
             'title': 'Event title',
             'park': 'Park location',
@@ -40,7 +53,11 @@ class EventCreateForm(forms.ModelForm):
             'date': 'Event date',
             'time': 'Start time',
             'skill_level': 'Skill requirement',
+            'host_is_playing': "I'm playing in this game",
             'description': 'Event description',
+        }
+        help_texts = {
+            'host_is_playing': 'You count toward the participant limit. Uncheck if you are only organizing.',
         }
         error_messages = {
             'meeting_spot': {'required': MEETING_SPOT_ERROR_MESSAGE},

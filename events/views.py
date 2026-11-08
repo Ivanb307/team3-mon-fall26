@@ -365,12 +365,12 @@ class EventDetailView(DetailView):
         event = self.object
         active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).select_related('user__profile')
         discussion_messages = Message.objects.filter(event=event).select_related('author__profile')
-        announcement_messages = discussion_messages.filter(
-            author=event.organizer, is_announcement=True
-        ).order_by('-created_at', '-pk')
-        regular_messages = discussion_messages.exclude(
-            author=event.organizer, is_announcement=True
-        ).order_by('created_at', 'pk')
+        announcement_messages = discussion_messages.filter(author=event.organizer, is_announcement=True).order_by(
+            '-created_at', '-pk'
+        )
+        regular_messages = discussion_messages.exclude(author=event.organizer, is_announcement=True).order_by(
+            'created_at', 'pk'
+        )
         confirmed_players = event.confirmed_players
         user_rsvp = None
         if self.request.user.is_authenticated and self.request.user != event.organizer:

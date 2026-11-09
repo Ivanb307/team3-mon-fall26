@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% load explore_tags %}
+{% load static explore_tags %}
 
 {% block title %}Create an Event · NYC Active{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/lookahead-select.css' %}">
+{% endblock %}
 
 {% block content %}
 {% include "events/_hub_header.html" with active="create" back=True %}
@@ -48,6 +52,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{% static 'js/lookahead-select.js' %}" defer></script>
 <script>
   (function () {
     const input = document.querySelector('input[data-capacity-input="true"]');

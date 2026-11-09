@@ -11,6 +11,7 @@ from .models import CAPACITY_ERROR_MESSAGE, Activity, Event
 NYC_TZ = ZoneInfo('America/New_York')
 MAX_CAPACITY = 10000
 MEETING_SPOT_ERROR_MESSAGE = 'Please specify where in the park to meet'
+PARK_ERROR_MESSAGE = 'Please select a valid park'
 
 
 class EventCreateForm(forms.ModelForm):
@@ -79,6 +80,18 @@ class EventCreateForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['park'].queryset = Park.objects.filter(is_retired=False).order_by('name', 'gispropnum')
         self.fields['park'].empty_label = 'Select an NYC park'
+        # US-3.9 (#81): retired or nonexistent parks are rejected, and the select becomes a type-to-search
+        # picker (static/js/lookahead-select.js). Without JavaScript it stays a plain dropdown.
+        self.fields['park'].error_messages['invalid_choice'] = PARK_ERROR_MESSAGE
+        self.fields['park'].widget.attrs.update(
+            {
+                'data-lookahead': '',
+                'data-placeholder': 'Type a park name or borough',
+                'data-empty': 'No matching NYC parks',
+                'data-max-results': '50',
+                'data-more': 'Keep typing to see more parks',
+            }
+        )
         # Blank is allowed in the model for events created before this field existed (#80).
         self.fields['meeting_spot'].required = True
         self.fields['activity'].choices = [('', 'Select a sport')] + list(Activity.choices)

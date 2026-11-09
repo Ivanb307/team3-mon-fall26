@@ -287,6 +287,17 @@ class EventCreateView(LoginRequiredMixin, CreateView):
     form_class = EventCreateForm
     template_name = 'events/event_form.html'
 
+    def get_initial(self):
+        """Pre-select the park when starting from a park page or panel (US-3.9). Invalid `?park=` values are ignored."""
+        initial = super().get_initial()
+        park = self.request.GET.get('park', '')
+        # isdigit() alone also accepts characters such as '²' that int() rejects, so allow only ASCII 0-9.
+        # The length check keeps oversized numbers away from the database's integer range.
+        is_park_id = park.isascii() and park.isdigit() and len(park) <= 9
+        if is_park_id and Park.objects.filter(pk=int(park), is_retired=False).exists():
+            initial['park'] = int(park)
+        return initial
+
     def form_valid(self, form):
         form.instance.organizer = self.request.user
         response = super().form_valid(form)

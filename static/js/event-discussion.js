@@ -2,14 +2,19 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
   const discussion = list.closest('.event-discussion');
   const form = discussion.querySelector('[data-event-discussion-form]');
   let latestId = Number(list.dataset.latestMessageId) || 0;
+  const discussionOpen = list.dataset.discussionOpen === 'true';
   let polling = false;
+  let pollTimer = null;
 
   const addMessage = (html, id, isAnnouncement = false) => {
+    const messageId = Number(id);
+    if (!Number.isInteger(messageId) || list.querySelector(`[data-message-id="${messageId}"]`)) return;
+
     const message = document.createElement('template');
     message.innerHTML = html.trim();
     const item = message.content.firstElementChild;
     if (!item) return;
-    item.dataset.messageId = String(id);
+    item.dataset.messageId = String(messageId);
 
     if (isAnnouncement) {
       const firstAnnouncement = list.querySelector('.event-discussion-message--announcement');
@@ -20,8 +25,6 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
     }
 
     discussion.querySelector('.event-discussion-empty')?.remove();
-    latestId = Math.max(latestId, Number(id) || 0);
-    list.dataset.latestMessageId = String(latestId);
   };
 
   if (form) {
@@ -58,7 +61,7 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
   }
 
   const updateDiscussion = async () => {
-    if (polling) return;
+    if (polling || document.hidden || !discussionOpen) return;
     polling = true;
     try {
       const url = new URL(list.dataset.updatesUrl, window.location.href);
@@ -66,9 +69,15 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
       const response = await fetch(url, {credentials: 'same-origin'});
       if (!response.ok) return;
       const result = await response.json();
+      if (!result.discussion_open) {
+        window.clearInterval(pollTimer);
+        return;
+      }
       result.messages.forEach((message) => {
         addMessage(message.html, message.id, message.is_announcement);
       });
+      latestId = Math.max(latestId, Number(result.latest_id) || 0);
+      list.dataset.latestMessageId = String(latestId);
     } catch {
       // A later poll retries transient network errors without interrupting posting.
     } finally {
@@ -76,5 +85,5 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
     }
   };
 
-  window.setInterval(updateDiscussion, 5000);
+  if (discussionOpen) pollTimer = window.setInterval(updateDiscussion, 30000);
 });

@@ -494,12 +494,15 @@ def event_discussion_updates(request, pk):
     except ValueError:
         return JsonResponse({'error': 'Invalid message cursor.'}, status=400)
 
-    messages = (
+    if event.status != EventStatus.SCHEDULED:
+        return JsonResponse({'messages': [], 'latest_id': after_id, 'discussion_open': False})
+
+    new_messages = (
         Message.objects.filter(event=event, pk__gt=after_id).select_related('author__profile').order_by('pk')[:100]
     )
     results = []
     latest_id = after_id
-    for message in messages:
+    for message in new_messages:
         is_announcement = message.author_id == event.organizer_id and message.is_announcement
         results.append(
             {
@@ -514,7 +517,7 @@ def event_discussion_updates(request, pk):
         )
         latest_id = message.pk
 
-    return JsonResponse({'messages': results, 'latest_id': latest_id})
+    return JsonResponse({'messages': results, 'latest_id': latest_id, 'discussion_open': True})
 
 
 def join_block_reason(event, rsvp):

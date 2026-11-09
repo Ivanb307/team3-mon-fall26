@@ -207,6 +207,19 @@ class EventDiscussionTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'error': 'Invalid message cursor.'})
 
+    def test_live_updates_stop_when_event_discussion_is_closed(self):
+        Event.objects.filter(pk=self.event.pk).update(status=EventStatus.CANCELLED)
+
+        response = self.client.get(
+            reverse('event_discussion_updates', kwargs={'pk': self.event.pk}),
+            {'after': 0},
+        )
+
+        self.assertEqual(
+            response.json(),
+            {'messages': [], 'latest_id': 0, 'discussion_open': False},
+        )
+
     def test_cancelled_and_removed_events_hide_form_and_refuse_posts(self):
         self.client.force_login(self.player)
         url = reverse('event_message_post', kwargs={'pk': self.event.pk})

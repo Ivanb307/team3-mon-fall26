@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 CAPACITY_ERROR_MESSAGE = 'Participant limit must be at least 1 or left blank for unlimited.'
+MESSAGE_MAX_LENGTH = 2000
 
 # Event date/time are entered as New York local time (see EventCreateForm.clean).
 NYC_TZ = ZoneInfo('America/New_York')
@@ -215,3 +216,20 @@ class RSVP(models.Model):
 
     def __str__(self):
         return f'{self.user} for {self.event} ({self.status})'
+
+
+class Message(models.Model):
+    """A public message or organizer announcement on an event discussion."""
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='messages')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='event_messages')
+    body = models.TextField(max_length=MESSAGE_MAX_LENGTH)
+    is_announcement = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at', 'pk']
+
+    def __str__(self):
+        return f'{self.author} on {self.event}: {self.body[:40]}'

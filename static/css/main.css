@@ -1165,6 +1165,17 @@ a:focus-visible {
   border-radius: 999px;
 }
 
+.event-roster-skill {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.event-roster-remove {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+}
+
 .event-roster-empty {
   font-size: 0.875rem;
   color: var(--muted);
@@ -1218,6 +1229,93 @@ a:focus-visible {
   color: var(--ink-2);
   background: var(--bg);
   border-radius: var(--radius);
+}
+
+.event-discussion {
+  padding-top: 20px;
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.event-discussion h2 {
+  margin: 0 0 12px;
+  font-size: 1.125rem;
+}
+
+.event-discussion-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.event-discussion-message {
+  padding: 12px;
+  color: var(--ink-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.event-discussion-message--announcement {
+  border-color: var(--green-600);
+}
+
+.event-discussion-message-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+  font-size: 0.8125rem;
+}
+
+.event-discussion-message-header a {
+  font-weight: 700;
+}
+
+.event-discussion-message-header time {
+  color: var(--muted);
+}
+
+.event-discussion-announcement-label {
+  font-weight: 700;
+  color: var(--green-700);
+}
+
+.event-discussion-message p,
+.event-discussion-empty {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.event-discussion-form {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.event-discussion-form label {
+  font-weight: 600;
+}
+
+.event-discussion-form textarea {
+  width: min(100%, 680px);
+  min-height: 100px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.event-discussion-login,
+.event-discussion-closed {
+  margin: 16px 0 0;
+  font-weight: 600;
 }
 
 .event-manage {

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ event.display_title }} at {{ event.park.name }} · NYC Active{% endblock %}
 
@@ -86,9 +87,9 @@
       {% endif %}
       {% for rsvp in active_rsvps %}
         {% if user.is_authenticated and rsvp.user_id == user.id %}
-          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="You" %}
+          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="You" rsvp=rsvp %}
         {% else %}
-          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="" %}
+          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="" rsvp=rsvp %}
         {% endif %}
       {% empty %}
         <li class="event-roster-empty">No one has RSVP’d yet.</li>
@@ -131,6 +132,8 @@
     </div>
   </section>
 
+  {% include "events/includes/event_discussion.html" %}
+
   {% if can_edit_event or can_cancel_event %}
     <section class="event-manage" aria-label="Manage this event">
       {% if can_edit_event %}<a class="btn btn--ghost" href="{% url 'event_edit' event.pk %}">Edit Event</a>{% endif %}
@@ -144,3 +147,5 @@
   {% endif %}
 </article>
 {% endblock %}
+
+{% block scripts %}{{ block.super }}<script src="{% static 'js/event-discussion.js' %}" defer></script>{% endblock %}

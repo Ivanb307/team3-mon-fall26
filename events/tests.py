@@ -738,11 +738,11 @@ class EventRSVPTests(TestCase):
         self.client.force_login(self.player)
 
         page = self.client.get(self.detail_url)
-        self.assertContains(page, 'Your RSVP was removed by the organizer.')
+        self.assertContains(page, 'Your RSVP was removed by the organizer. You can&#x27;t rejoin this event.')
         self.assertNotContains(page, 'This event is full.')
         response = self.client.post(self.rsvp_url, follow=True)
 
-        self.assertContains(response, 'Your RSVP was removed by the organizer.')
+        self.assertContains(response, 'Your RSVP was removed by the organizer. You can&#x27;t rejoin this event.')
         self.assertEqual(RSVP.objects.filter(event=self.event, user=self.player).count(), 1)
         self.assertEqual(RSVP.objects.get(event=self.event, user=self.player).status, RSVPStatus.REMOVED)
 

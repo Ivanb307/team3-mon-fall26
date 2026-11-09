@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
@@ -16,7 +17,7 @@ from parks.views import facility_groups, with_availability
 from .forms import EventCreateForm, EventUpdateForm
 from .hosting import HostPlayingError, host_playing_error, set_host_playing
 from .hub import remember_explore
-from .models import Event, EventStatus, RSVP, RSVPStatus
+from .models import Event, EventStatus, MESSAGE_MAX_LENGTH, Message, RSVP, RSVPStatus
 from .explore import (
     configure_filter_form,
     displayed_parks,
@@ -419,6 +420,26 @@ class EventUpdateView(OrganizerOrAdminRequiredMixin, UpdateView):
         return redirect(updated.get_absolute_url())
 
 
+class EventRemoveParticipantView(OrganizerOrAdminRequiredMixin, View):
+    """Remove an active RSVP without deleting its history (#33)."""
+
+    def post(self, request, pk, rsvp_pk):
+        with transaction.atomic():
+            event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+            rsvp = get_object_or_404(RSVP.objects.select_for_update(), pk=rsvp_pk, event=event)
+            if event.status != EventStatus.SCHEDULED:
+                messages.error(request, 'Participants can only be removed from scheduled events.')
+            elif event.is_past:
+                messages.error(request, 'This event has already started, so participants can no longer be removed.')
+            elif rsvp.status != RSVPStatus.ACTIVE:
+                messages.error(request, 'This participant is no longer attending this event.')
+            else:
+                rsvp.status = RSVPStatus.REMOVED
+                rsvp.save(update_fields=['status', 'updated_at'])
+                messages.success(request, 'Participant removed from the event.')
+        return redirect(event.get_absolute_url())
+
+
 class EventHostPlayingView(LoginRequiredMixin, View):
     """The host's own "I'm playing in this game" switch on the event page (US-3.10 / #82).
 
@@ -455,6 +476,14 @@ class EventDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         event = self.object
         active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).select_related('user__profile')
+        discussion_messages = Message.objects.filter(event=event).select_related('author__profile')
+        latest_discussion_message_id = discussion_messages.order_by('-pk').values_list('pk', flat=True).first() or 0
+        announcement_messages = discussion_messages.filter(author=event.organizer, is_announcement=True).order_by(
+            '-created_at', '-pk'
+        )
+        regular_messages = discussion_messages.exclude(author=event.organizer, is_announcement=True).order_by(
+            'created_at', 'pk'
+        )
         confirmed_players = event.confirmed_players
         user_rsvp = None
         if self.request.user.is_authenticated and self.request.user != event.organizer:
@@ -470,7 +499,7 @@ class EventDetailView(DetailView):
 
         reason = event_block_reason
         if reason is None and user_rsvp and user_rsvp.status == RSVPStatus.REMOVED:
-            reason = 'Your RSVP was removed by the organizer.'
+            reason = 'Your RSVP was removed by the organizer. You can\'t rejoin this event.'
         elif reason is None and event.capacity is not None and confirmed_players >= event.capacity:
             reason = 'This event is full.'
 
@@ -480,6 +509,12 @@ class EventDetailView(DetailView):
             can_cancel_event=can_manage and event_block_reason is None,
             can_edit_event=can_manage and event_block_reason is None,
             active_rsvps=active_rsvps,
+            announcement_messages=announcement_messages,
+            regular_messages=regular_messages,
+            has_discussion_messages=announcement_messages.exists() or regular_messages.exists(),
+            latest_discussion_message_id=latest_discussion_message_id,
+            can_post_message=event.status == EventStatus.SCHEDULED,
+            message_max_length=MESSAGE_MAX_LENGTH,
             confirmed_players=confirmed_players,
             spots_remaining=(None if event.capacity is None else max(event.capacity - confirmed_players, 0)),
             user_rsvp=user_rsvp,
@@ -498,12 +533,91 @@ class EventDetailView(DetailView):
         return context
 
 
+@require_POST
+def post_event_message(request, pk):
+    event_url = reverse('event_detail', kwargs={'pk': pk})
+    wants_json = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    if not request.user.is_authenticated:
+        if wants_json:
+            return JsonResponse({'error': 'Please log in to join the discussion.'}, status=401)
+        return redirect_to_login(event_url)
+
+    with transaction.atomic():
+        event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+        if event.status != EventStatus.SCHEDULED:
+            error = 'Discussion is closed for this event.'
+            if wants_json:
+                return JsonResponse({'error': error}, status=409)
+            messages.error(request, error)
+        else:
+            body = request.POST.get('body', '').strip()
+            if not body:
+                error = 'Message cannot be blank.'
+                if wants_json:
+                    return JsonResponse({'error': error}, status=400)
+                messages.error(request, error)
+            elif len(body) > MESSAGE_MAX_LENGTH:
+                error = f'Message cannot exceed {MESSAGE_MAX_LENGTH} characters.'
+                if wants_json:
+                    return JsonResponse({'error': error}, status=400)
+                messages.error(request, error)
+            else:
+                message = Message.objects.create(event=event, author=request.user, body=body)
+                if wants_json:
+                    message = Message.objects.select_related('author__profile').get(pk=message.pk)
+                    return JsonResponse(
+                        {
+                            'html': render_to_string(
+                                'events/includes/event_message.html',
+                                {'message': message},
+                                request=request,
+                            ),
+                            'id': message.pk,
+                        }
+                    )
+    return redirect(event_url)
+
+
+@require_GET
+def event_discussion_updates(request, pk):
+    event = get_object_or_404(Event, pk=pk)
+    try:
+        after_id = max(int(request.GET.get('after', '0')), 0)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid message cursor.'}, status=400)
+
+    if event.status != EventStatus.SCHEDULED:
+        return JsonResponse({'messages': [], 'latest_id': after_id, 'discussion_open': False})
+
+    new_messages = (
+        Message.objects.filter(event=event, pk__gt=after_id).select_related('author__profile').order_by('pk')[:100]
+    )
+    results = []
+    latest_id = after_id
+    for message in new_messages:
+        is_announcement = message.author_id == event.organizer_id and message.is_announcement
+        results.append(
+            {
+                'id': message.pk,
+                'is_announcement': is_announcement,
+                'html': render_to_string(
+                    'events/includes/event_message.html',
+                    {'message': message, 'is_announcement': is_announcement},
+                    request=request,
+                ),
+            }
+        )
+        latest_id = message.pk
+
+    return JsonResponse({'messages': results, 'latest_id': latest_id, 'discussion_open': True})
+
+
 def join_block_reason(event, rsvp):
     """Why `rsvp`'s user can't join `event` right now, or None. Call under the event lock (#31)."""
     if rsvp and rsvp.status == RSVPStatus.ACTIVE:
         return "You're already attending."
     if rsvp and rsvp.status == RSVPStatus.REMOVED:
-        return 'Your RSVP was removed by the organizer.'
+        return 'Your RSVP was removed by the organizer. You can\'t rejoin this event.'
     if event.status == EventStatus.CANCELLED:
         return 'This event has been cancelled.'
     if event.status == EventStatus.REMOVED:

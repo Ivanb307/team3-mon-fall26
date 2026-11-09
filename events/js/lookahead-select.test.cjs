@@ -258,6 +258,7 @@ test('park picker: removing the pill falls back to the blank option', () => {
 test('data-max-results caps long lists and says to keep typing', () => {
   const many = [['', 'Select an NYC park'], ...Array.from({length: 60}, (_, i) => [String(i + 1), `Park ${i + 1}`])];
   const {ui} = single(many, '', {maxResults: '50', more: 'Keep typing to see more parks'});
+  ui.input.value = '';  // the fake DOM doesn't start inputs empty like a browser does
   ui.input.fire('focus');
   assert.equal(optionTexts(ui.list).length, 50);
   assert.equal(ui.list.children.at(-1).textContent, 'Keep typing to see more parks');

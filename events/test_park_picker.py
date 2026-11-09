@@ -77,7 +77,8 @@ class ParkPickerTests(TestCase):
 
     # Scenario: Invalid park (an invalid `?park=` leaves the picker empty)
     def test_invalid_park_parameter_leaves_the_picker_empty(self):
-        for value in ('abc', '', '-1', '999999', '9' * 30, str(self.retired.pk)):
+        # '²', '٣' and '１' are Unicode digits that str.isdigit() accepts; '²' used to raise a 500.
+        for value in ('abc', '', '-1', '999999', '9' * 30, str(self.retired.pk), '²', '٣', '１'):
             with self.subTest(park=value):
                 response = self.form_page(value)
 

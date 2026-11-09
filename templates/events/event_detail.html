@@ -86,9 +86,9 @@
       {% endif %}
       {% for rsvp in active_rsvps %}
         {% if user.is_authenticated and rsvp.user_id == user.id %}
-          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="You" %}
+          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="You" rsvp=rsvp %}
         {% else %}
-          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="" %}
+          {% include "events/includes/roster_chip.html" with member=rsvp.user tag="" rsvp=rsvp %}
         {% endif %}
       {% empty %}
         <li class="event-roster-empty">No one has RSVP’d yet.</li>

@@ -97,8 +97,17 @@ class EventAvailabilityTests(TestCase):
 
         response = self.client.get(game.get_absolute_url())
 
-        self.assertContains(response, '@CourtCaptain <span class="event-roster-tag">Host · Playing</span>')
+        self.assertContains(response, f'href="{reverse("public_profile", kwargs={"username": self.host.username})}"')
+        self.assertContains(response, '@CourtCaptain</a> <span class="event-roster-tag">Host · Playing</span>')
         self.assertContains(response, 'avatars/captain.png')
-        self.assertContains(response, '@Hooper</li>')
-        self.assertContains(response, '@spots-player1</li>', msg_prefix='No profile falls back to the username')
+        self.assertContains(
+            response, f'href="{reverse("public_profile", kwargs={"username": self.players[0].username})}"'
+        )
+        self.assertContains(response, '@Hooper</a>')
+        self.assertContains(
+            response,
+            f'href="{reverse("public_profile", kwargs={"username": self.players[1].username})}"',
+            msg_prefix='No profile falls back to the username',
+        )
+        self.assertContains(response, '@spots-player1</a>', msg_prefix='No profile falls back to the username')
         self.assertContains(response, 'class="profile-photo-placeholder"', count=2)

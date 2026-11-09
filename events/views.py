@@ -328,6 +328,26 @@ class EventCancelView(OrganizerOrAdminRequiredMixin, View):
         return redirect(event.get_absolute_url())
 
 
+class EventRemoveParticipantView(OrganizerOrAdminRequiredMixin, View):
+    """Remove an active RSVP without deleting its history (#33)."""
+
+    def post(self, request, pk, rsvp_pk):
+        with transaction.atomic():
+            event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+            rsvp = get_object_or_404(RSVP.objects.select_for_update(), pk=rsvp_pk, event=event)
+            if event.status != EventStatus.SCHEDULED:
+                messages.error(request, 'Participants can only be removed from scheduled events.')
+            elif event.is_past:
+                messages.error(request, 'This event has already started, so participants can no longer be removed.')
+            elif rsvp.status != RSVPStatus.ACTIVE:
+                messages.error(request, 'This participant is no longer attending this event.')
+            else:
+                rsvp.status = RSVPStatus.REMOVED
+                rsvp.save(update_fields=['status', 'updated_at'])
+                messages.success(request, 'Participant removed from the event.')
+        return redirect(event.get_absolute_url())
+
+
 class EventHostPlayingView(LoginRequiredMixin, View):
     """The host's own "I'm playing in this game" switch on the event page (US-3.10 / #82).
 
@@ -379,7 +399,7 @@ class EventDetailView(DetailView):
 
         reason = event_block_reason
         if reason is None and user_rsvp and user_rsvp.status == RSVPStatus.REMOVED:
-            reason = 'Your RSVP was removed by the organizer.'
+            reason = 'Your RSVP was removed by the organizer. You can\'t rejoin this event.'
         elif reason is None and event.capacity is not None and confirmed_players >= event.capacity:
             reason = 'This event is full.'
 
@@ -411,7 +431,7 @@ def join_block_reason(event, rsvp):
     if rsvp and rsvp.status == RSVPStatus.ACTIVE:
         return "You're already attending."
     if rsvp and rsvp.status == RSVPStatus.REMOVED:
-        return 'Your RSVP was removed by the organizer.'
+        return 'Your RSVP was removed by the organizer. You can\'t rejoin this event.'
     if event.status == EventStatus.CANCELLED:
         return 'This event has been cancelled.'
     if event.status == EventStatus.REMOVED:

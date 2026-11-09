@@ -1,18 +1,27 @@
 {% extends "base.html" %}
 {% load static explore_tags %}
 
-{% block title %}Create an Event · NYC Active{% endblock %}
+{% block title %}{% if is_edit %}Edit {{ event.display_title }}{% else %}Create an Event{% endif %} · NYC Active{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/lookahead-select.css' %}">
 {% endblock %}
 
 {% block content %}
+{% if is_edit %}
+{% include "events/_hub_header.html" with active="explore" back=True %}
+{% else %}
 {% include "events/_hub_header.html" with active="create" back=True %}
+{% endif %}
 <section class="event-card">
   <header class="event-card-header">
+    {% if is_edit %}
+    <h1 class="event-card-title">Edit Your Event</h1>
+    <p class="event-card-subtitle">Update the details players see. Changes show on the event page and in Explore Events.</p>
+    {% else %}
     <h1 class="event-card-title">Organize a Park Meetup</h1>
     <p class="event-card-subtitle">Pick an NYC park, set a schedule and skill level, and publish your game.</p>
+    {% endif %}
   </header>
 
   {% include "includes/form_errors.html" %}
@@ -22,7 +31,16 @@
     {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
 
     {% include "includes/form_field.html" with field=form.title %}
+    {% if is_edit %}
+    {# US-3.4 (#25): the park is locked after creation; the form has no park field, so a posted value is ignored. #}
+    <div class="field">
+      <label for="event-park-locked">Park location</label>
+      <div class="input-wrap input-wrap--text"><input id="event-park-locked" type="text" value="{{ event.park }}" readonly disabled aria-describedby="event-park-locked-help"></div>
+      <div class="field-help" id="event-park-locked-help">To change parks, cancel this event and create a new one.</div>
+    </div>
+    {% else %}
     {% include "includes/form_field.html" with field=form.park %}
+    {% endif %}
     {% include "includes/form_field.html" with field=form.meeting_spot %}
     {% include "includes/form_field.html" with field=form.activity %}
 
@@ -36,16 +54,24 @@
       {% include "includes/form_field.html" with field=form.capacity %}
     </div>
 
-    <div class="field event-host-playing-field">
+    {% if 'host_is_playing' in form.fields %}
+    <div class="field event-host-playing-field{% if form.host_is_playing.errors %} field--error{% endif %}">
       <label class="event-host-playing-toggle">{{ form.host_is_playing }} {{ form.host_is_playing.label }}</label>
+      {% for error in form.host_is_playing.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
       <div class="field-help" id="{{ form.host_is_playing.auto_id }}_helptext">{{ form.host_is_playing.help_text }}</div>
     </div>
+    {% endif %}
 
     {% include "includes/form_field.html" with field=form.description %}
 
     <div class="event-form-actions">
+      {% if is_edit %}
+      <a href="{{ event.get_absolute_url }}" class="btn btn--ghost">Cancel</a>
+      <button type="submit" class="btn btn--primary">Save changes</button>
+      {% else %}
       <a href="{% last_explore_url %}" class="btn btn--ghost">Cancel</a>
       <button type="submit" class="btn btn--primary">Publish event</button>
+      {% endif %}
     </div>
   </form>
 </section>

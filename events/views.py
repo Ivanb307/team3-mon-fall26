@@ -8,13 +8,13 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
-from django.views.generic import CreateView, DetailView, ListView, View
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from parks.models import Facility, Park
 from parks.views import facility_groups, with_availability
 
-from .forms import EventCreateForm
-from .hosting import HostPlayingError, set_host_playing
+from .forms import EventCreateForm, EventUpdateForm
+from .hosting import HostPlayingError, host_playing_error, set_host_playing
 from .hub import remember_explore
 from .models import Event, EventStatus, RSVP, RSVPStatus
 from .explore import (
@@ -337,11 +337,93 @@ class EventCancelView(OrganizerOrAdminRequiredMixin, View):
         return redirect(event.get_absolute_url())
 
 
+def edit_block_reason(event):
+    """Why `event` can't be edited right now, or None (US-3.4 / #25)."""
+    if event.status == EventStatus.CANCELLED:
+        return 'This event has been cancelled, so it can no longer be edited.'
+    if event.status == EventStatus.REMOVED:
+        return 'This event has been removed, so it can no longer be edited.'
+    if event.is_past:
+        return 'This event has already started, so it can no longer be edited.'
+    return None
+
+
+def limit_below_confirmed_message(confirmed):
+    """US-3.5 (#26): the error when a new limit would drop someone who's already confirmed."""
+    noun = 'player' if confirmed == 1 else 'players'
+    return f'Participant limit cannot be lower than the {confirmed} currently confirmed {noun}.'
+
+
+class EventUpdateView(OrganizerOrAdminRequiredMixin, UpdateView):
+    """Edit an upcoming event (US-3.4 / #25), for its organizer or an administrator (#27).
+
+    The park stays locked. The limit and the host's "I'm playing" choice are checked under the event
+    row lock that Join takes (#31), so a new limit never drops a confirmed player (#26), even if
+    someone joins while the form is being saved.
+    """
+
+    model = Event
+    form_class = EventUpdateForm
+    template_name = 'events/event_form.html'
+
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            # Unlike the POST-only management URLs, the edit page can be shown again after login.
+            return redirect_to_login(self.request.get_full_path())
+        return super().handle_no_permission()
+
+    def refused(self, event):
+        reason = edit_block_reason(event)
+        if reason is None:
+            return None
+        messages.error(self.request, reason)
+        return redirect(event.get_absolute_url())
+
+    def get(self, request, *args, **kwargs):
+        return self.refused(self.get_object()) or super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        return self.refused(self.get_object()) or super().post(request, *args, **kwargs)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if self.request.user.pk != self.object.organizer_id:
+            # Only the organizer chooses whether they play (US-3.10); an administrator edits everything else.
+            del form.fields['host_is_playing']
+        return form
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(is_edit=True, **kwargs)
+
+    def form_valid(self, form):
+        with transaction.atomic():
+            event = Event.objects.select_for_update().get(pk=self.object.pk)
+            refused = self.refused(event)
+            if refused:
+                return refused
+            playing = form.cleaned_data.get('host_is_playing', event.host_is_playing)
+            capacity = form.cleaned_data.get('capacity')
+            active_rsvps = event.rsvps.filter(status=RSVPStatus.ACTIVE).count()
+            error = host_playing_error(event, playing, capacity=capacity, active_rsvps=active_rsvps)
+            if error:
+                form.add_error('host_is_playing', error)
+                return self.form_invalid(form)
+            confirmed = active_rsvps + int(playing)
+            if capacity is not None and capacity < confirmed:
+                form.add_error('capacity', limit_below_confirmed_message(confirmed))
+                return self.form_invalid(form)
+            updated = form.save(commit=False)
+            # Save only the edited fields, so a cancellation saved meanwhile isn't overwritten.
+            updated.save(update_fields=[*form.fields, 'updated_at'])
+        messages.success(self.request, 'Your event has been updated.')
+        return redirect(updated.get_absolute_url())
+
+
 class EventHostPlayingView(LoginRequiredMixin, View):
     """The host's own "I'm playing in this game" switch on the event page (US-3.10 / #82).
 
-    Only the organizer chooses whether they play. Until Edit Event (#25) lands this is the place to
-    change it after creation; #25's form should call the same `set_host_playing()`.
+    Only the organizer chooses whether they play. Edit Event (#25) applies the same rule
+    (`host_playing_error()`) together with its limit check.
     """
 
     def post(self, request, pk):
@@ -396,6 +478,7 @@ class EventDetailView(DetailView):
         context.update(
             can_manage=can_manage,
             can_cancel_event=can_manage and event_block_reason is None,
+            can_edit_event=can_manage and event_block_reason is None,
             active_rsvps=active_rsvps,
             confirmed_players=confirmed_players,
             spots_remaining=(None if event.capacity is None else max(event.capacity - confirmed_players, 0)),

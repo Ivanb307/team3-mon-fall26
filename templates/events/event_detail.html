@@ -97,7 +97,7 @@
 
     <div class="event-attendance-actions">
     {% if user.is_authenticated and user == event.organizer %}
-      {# Organizers never RSVP; they choose whether they play (US-3.10 / #82). Edit Event (#25) will offer the same. #}
+      {# Organizers never RSVP; they choose whether they play (US-3.10 / #82). Edit Event (#25) offers the same. #}
       <form class="event-host-playing" method="post" action="{% url 'event_host_playing' event.pk %}">
         {% csrf_token %}
         <label class="event-host-playing-toggle">
@@ -131,12 +131,15 @@
     </div>
   </section>
 
-  {% if can_cancel_event %}
+  {% if can_edit_event or can_cancel_event %}
     <section class="event-manage" aria-label="Manage this event">
+      {% if can_edit_event %}<a class="btn btn--ghost" href="{% url 'event_edit' event.pk %}">Edit Event</a>{% endif %}
+      {% if can_cancel_event %}
       <form method="post" action="{% url 'event_cancel' event.pk %}" onsubmit="return confirm('Cancel this event? Players will see that it is off, and this cannot be undone.');">
         {% csrf_token %}
         <button class="btn btn--ghost" type="submit">Cancel Event</button>
       </form>
+      {% endif %}
     </section>
   {% endif %}
 </article>

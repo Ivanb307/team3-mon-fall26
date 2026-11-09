@@ -3,8 +3,8 @@
 The host never gets an RSVP row; `Event.host_is_playing` decides whether they take a spot, and
 `EventQuerySet.with_confirmed_players()` counts them. Every change goes through
 `set_host_playing()`, which holds the event's row lock (the same lock Join takes, #31) so a host
-stepping back in can't race a last-spot join. The Edit Event form (#25) should call it too, passing
-the submitted capacity so both checks use the values being saved (#26).
+stepping back in can't race a last-spot join. Edit Event (#25) applies `host_playing_error()` under
+the same lock, with the submitted limit, alongside its #26 check that the limit covers everyone confirmed.
 """
 
 from django.db import transaction

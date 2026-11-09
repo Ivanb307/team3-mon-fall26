@@ -78,20 +78,21 @@ class EventCreateForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['park'].queryset = Park.objects.filter(is_retired=False).order_by('name', 'gispropnum')
-        self.fields['park'].empty_label = 'Select an NYC park'
-        # US-3.9 (#81): retired or nonexistent parks are rejected, and the select becomes a type-to-search
-        # picker (static/js/lookahead-select.js). Without JavaScript it stays a plain dropdown.
-        self.fields['park'].error_messages['invalid_choice'] = PARK_ERROR_MESSAGE
-        self.fields['park'].widget.attrs.update(
-            {
-                'data-lookahead': '',
-                'data-placeholder': 'Type a park name or borough',
-                'data-empty': 'No matching NYC parks',
-                'data-max-results': '50',
-                'data-more': 'Keep typing to see more parks',
-            }
-        )
+        if 'park' in self.fields:  # Edit Event (EventUpdateForm) has no park field
+            self.fields['park'].queryset = Park.objects.filter(is_retired=False).order_by('name', 'gispropnum')
+            self.fields['park'].empty_label = 'Select an NYC park'
+            # US-3.9 (#81): retired or nonexistent parks are rejected, and the select becomes a type-to-search
+            # picker (static/js/lookahead-select.js). Without JavaScript it stays a plain dropdown.
+            self.fields['park'].error_messages['invalid_choice'] = PARK_ERROR_MESSAGE
+            self.fields['park'].widget.attrs.update(
+                {
+                    'data-lookahead': '',
+                    'data-placeholder': 'Type a park name or borough',
+                    'data-empty': 'No matching NYC parks',
+                    'data-max-results': '50',
+                    'data-more': 'Keep typing to see more parks',
+                }
+            )
         # Blank is allowed in the model for events created before this field existed (#80).
         self.fields['meeting_spot'].required = True
         self.fields['activity'].choices = [('', 'Select a sport')] + list(Activity.choices)
@@ -115,3 +116,10 @@ class EventCreateForm(forms.ModelForm):
             if scheduled <= now:
                 self.add_error('date', 'Event date and time must be in the future.')
         return cleaned_data
+
+
+class EventUpdateForm(EventCreateForm):
+    """US-3.4 (#25): the create form's fields and rules, minus the park, which can't change after creation."""
+
+    class Meta(EventCreateForm.Meta):
+        fields = tuple(name for name in EventCreateForm.Meta.fields if name != 'park')

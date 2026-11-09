@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from accounts.models import Profile
 from parks.models import Borough, Park
 
 from .models import Activity, Event, EventStatus, NYC_TZ, RSVP, RSVPStatus
@@ -128,7 +129,9 @@ class EventParticipantRemovalTests(EventManagementTestCase):
     def test_only_managers_see_remove_controls(self):
         self.assertNotContains(self.client.get(self.detail_url), '>Remove</button>')
         self.client.force_login(self.host)
-        self.assertContains(self.client.get(self.detail_url), '>Remove</button>')
+        response = self.client.get(self.detail_url)
+        self.assertContains(response, 'class="btn btn--ghost event-roster-remove"')
+        self.assertContains(response, r"Remove @manage\u002Dplayer from this event?")
 
     def test_roster_members_link_to_their_profiles(self):
         response = self.client.get(self.detail_url)
@@ -149,6 +152,38 @@ class EventParticipantRemovalTests(EventManagementTestCase):
         self.assertNotContains(page, '>Remove</button>')
         self.assertEqual(self.rsvp.status, RSVPStatus.ACTIVE)
         self.assertContains(response, 'This event has already started, so participants can no longer be removed.')
+
+    def test_cancelled_or_removed_event_hides_remove_control_and_rejects_removal(self):
+        self.client.force_login(self.host)
+        for status in (EventStatus.CANCELLED, EventStatus.REMOVED):
+            with self.subTest(status=status):
+                Event.objects.filter(pk=self.event.pk).update(status=status)
+
+                page = self.client.get(self.detail_url)
+                response = self.client.post(self.url, follow=True)
+
+                self.rsvp.refresh_from_db()
+                self.assertNotContains(page, '>Remove</button>')
+                self.assertEqual(self.rsvp.status, RSVPStatus.ACTIVE)
+                self.assertContains(response, 'Participants can only be removed from scheduled events.')
+                Event.objects.filter(pk=self.event.pk).update(status=EventStatus.SCHEDULED)
+
+    def test_roster_shows_member_skill_level_when_set(self):
+        profile, _ = Profile.objects.get_or_create(user=self.player)
+        profile.skill_level = 'intermediate'
+        profile.save(update_fields=['skill_level'])
+        self.client.force_login(self.host)
+
+        response = self.client.get(self.detail_url)
+
+        self.assertContains(response, '@manage-player</a> <span class="event-roster-skill">Intermediate</span>')
+
+    def test_roster_omits_member_skill_level_when_not_set(self):
+        self.client.force_login(self.host)
+
+        response = self.client.get(self.detail_url)
+
+        self.assertNotContains(response, '<span class="event-roster-skill"></span>')
 
     def test_non_manager_cannot_remove_participant(self):
         self.client.force_login(self.other)

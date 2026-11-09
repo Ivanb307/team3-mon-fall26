@@ -1165,6 +1165,17 @@ a:focus-visible {
   border-radius: 999px;
 }
 
+.event-roster-skill {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.event-roster-remove {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+}
+
 .event-roster-empty {
   font-size: 0.875rem;
   color: var(--muted);

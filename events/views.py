@@ -335,7 +335,9 @@ class EventRemoveParticipantView(OrganizerOrAdminRequiredMixin, View):
         with transaction.atomic():
             event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
             rsvp = get_object_or_404(RSVP.objects.select_for_update(), pk=rsvp_pk, event=event)
-            if event.is_past:
+            if event.status != EventStatus.SCHEDULED:
+                messages.error(request, 'Participants can only be removed from scheduled events.')
+            elif event.is_past:
                 messages.error(request, 'This event has already started, so participants can no longer be removed.')
             elif rsvp.status != RSVPStatus.ACTIVE:
                 messages.error(request, 'This participant is no longer attending this event.')

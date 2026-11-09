@@ -1,4 +1,4 @@
-<li class="event-discussion-message{% if is_announcement %} event-discussion-message--announcement{% endif %}">
+<li class="event-discussion-message{% if is_announcement %} event-discussion-message--announcement{% endif %}" data-message-id="{{ message.pk }}">
   <header class="event-discussion-message-header">
     <a href="{% url 'public_profile' username=message.author.username %}">@{{ message.author.profile.display_username|default:message.author.username }}</a>
     {% if is_announcement %}<span class="event-discussion-announcement-label">Organizer announcement</span>{% endif %}

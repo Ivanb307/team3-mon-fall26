@@ -16,7 +16,7 @@ from parks.views import facility_groups
 
 from .forms import EventCreateForm, EventUpdateForm
 from .hosting import HostPlayingError, host_playing_error, set_host_playing
-from .hub import positive_url_number, remember_explore, split_panel
+from .hub import panel_param, positive_url_number, remember_explore, split_panel
 from .models import Event, EventPhase, EventStatus, MESSAGE_MAX_LENGTH, Message, RSVP, RSVPStatus
 from .explore import (
     configure_filter_form,
@@ -26,6 +26,7 @@ from .explore import (
     filter_pills,
     matching_events,
     parse_filters,
+    selected_phases,
 )
 
 
@@ -66,6 +67,7 @@ CLEARABLE_FILTERS = (
     'date_from',
     'date_to',
     'skill',
+    'phase',
     'park',
     'events_only',
 )
@@ -284,10 +286,23 @@ def park_preview_context(park, filters, user, page=1):
     params['park'] = str(park.pk)
     params['view'] = 'list'
     params['tab'] = 'events'
+    # US-4.9 (#118): when Ended isn't selected, fetch this park's ended games in the same query so the
+    # panel can say how many are hidden, without another query.
+    phases = selected_phases(filters)
+    count_hidden = EventPhase.ENDED not in phases
+    query_filters = {**filters, 'phase': [*phases, EventPhase.ENDED]} if count_hidden else filters
     events = (
-        matching_events(filters, user).filter(park=park).with_confirmed_players().select_related('organizer__profile')
+        matching_events(query_filters, user)
+        .filter(park=park)
+        .with_confirmed_players()
+        .select_related('organizer__profile')
     )
-    park_events = event_cards(with_viewer_attending(events, user), user, filters)
+    cards = event_cards(with_viewer_attending(events, user), user, filters)
+    park_events = [event for event in cards if not (count_hidden and event.phase == EventPhase.ENDED)]
+    hidden_ended_total = len(cards) - len(park_events)
+    show_ended_params = filter_params(filters)
+    show_ended_params.setlist('phase', [str(phase) for phase in (*phases, EventPhase.ENDED)])
+    show_ended_params['panel'] = panel_param(park.pk)
     close_params = filter_params(filters)
     if page > 1:
         close_params['page'] = str(page)
@@ -298,6 +313,8 @@ def park_preview_context(park, filters, user, page=1):
         'events_url': reverse('event_list') + '?' + params.urlencode(),
         'park_events': park_events,
         'panel_event_total': len(park_events),
+        'hidden_ended_total': hidden_ended_total,
+        'show_ended_url': reverse('event_list') + '?' + show_ended_params.urlencode(),
         'in_park_panel': True,
         'organize_url': reverse('event_create') + '?park=' + str(park.pk),
         'close_panel_url': reverse('event_list') + '?' + close_params.urlencode(),

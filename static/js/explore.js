@@ -6,8 +6,17 @@
   const filtersForm = root.querySelector('.explore-filters');
   filtersForm.querySelector('[name="events_only"]').addEventListener('change', () => filtersForm.requestSubmit());
   // US-2.3: borough and zip-code picks apply immediately; the reload re-fits the map to the results.
-  filtersForm.querySelectorAll('[data-autosubmit]').forEach((field) =>
-    field.addEventListener('change', () => filtersForm.requestSubmit()));
+  const autosubmitFields = Array.from(filtersForm.querySelectorAll('[data-autosubmit]'));
+  const phaseBoxes = autosubmitFields.filter((field) => field.name === 'phase');
+  autosubmitFields.forEach((field) => field.addEventListener('change', () => {
+    // US-4.9 (#118): at least one phase stays checked, because none would match nothing. Unchecking the
+    // last one checks it again instead of submitting. (Without JavaScript, the server shows the default.)
+    if (field.name === 'phase' && !phaseBoxes.some((box) => box.checked)) {
+      field.checked = true;
+      return;
+    }
+    filtersForm.requestSubmit();
+  }));
   // US-2.7: clearing the search box with its built-in × resets results. Enter already submits the
   // form natively (and also fires 'search'), so skip that case to avoid a double submit.
   const search = filtersForm.querySelector('input[name="q"]');

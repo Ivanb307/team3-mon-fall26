@@ -26,6 +26,7 @@ from .explore import (
     filter_pills,
     matching_events,
     parse_filters,
+    with_park_phase_counts,
 )
 
 
@@ -165,7 +166,9 @@ class EventListView(ListView):
         page = context['page_obj'].number
         if self.panel_id:
             selected = (
-                displayed_parks(self.filters, self.request.user)
+                with_park_phase_counts(
+                    displayed_parks(self.filters, self.request.user), self.filters, self.request.user
+                )
                 .filter(pk=self.panel_id)
                 .with_review_summary()
                 .prefetch_related(Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active')))
@@ -227,7 +230,9 @@ def event_map_api(request):
     redirect = personal_scope_redirect(request, filters)
     if redirect:
         return redirect
-    parks = displayed_parks(filters, request.user).exclude(latitude=None).exclude(longitude=None)
+    parks = (
+        displayed_parks(filters, request.user, include_live_count=True).exclude(latitude=None).exclude(longitude=None)
+    )
     results = [
         {
             'id': p.pk,
@@ -236,6 +241,7 @@ def event_map_api(request):
             'lat': float(p.latitude),
             'lng': float(p.longitude),
             'event_count': p.event_count,
+            'live_count': p.live_count,
             'preview_url': reverse('explore_park_preview', kwargs={'pk': p.pk}),
         }
         for p in parks
@@ -256,7 +262,7 @@ def explore_park_preview(request, pk):
     if redirect:
         return redirect
     park = get_object_or_404(
-        displayed_parks(filters, request.user)
+        with_park_phase_counts(displayed_parks(filters, request.user), filters, request.user)
         .with_review_summary()
         .prefetch_related(Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active'))),
         pk=pk,
@@ -298,6 +304,7 @@ def park_preview_context(park, filters, user, page=1):
         'events_url': reverse('event_list') + '?' + params.urlencode(),
         'park_events': park_events,
         'panel_event_total': len(park_events),
+        'phase_counts': {phase: getattr(park, f'{phase}_count') for phase in EventPhase.values},
         'in_park_panel': True,
         'organize_url': reverse('event_create') + '?park=' + str(park.pk),
         'close_panel_url': reverse('event_list') + '?' + close_params.urlencode(),

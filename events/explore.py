@@ -295,7 +295,22 @@ def matching_events(filters, user=None):
     return events.order_by(*phase_ordering(now))
 
 
-def displayed_parks(filters, user=None):
+def park_event_count(events):
+    """Count a filtered event queryset per outer park without fetching event rows."""
+    counts = events.order_by().filter(park_id=OuterRef('pk')).values('park_id').annotate(total=Count('pk'))
+    return Coalesce(Subquery(counts.values('total'), output_field=IntegerField()), Value(0))
+
+
+def with_park_phase_counts(parks, filters, user=None):
+    """Panel totals ignore only phase selection; all other Explore rules still apply."""
+    events = matching_events({**filters, 'phase': list(EventPhase.values)}, user).filter(status=EventStatus.SCHEDULED)
+    now = timezone.now()
+    return parks.annotate(
+        **{f'{phase}_count': park_event_count(events.filter(phase_q(phase, now))) for phase in EventPhase.values}
+    )
+
+
+def displayed_parks(filters, user=None, *, include_live_count=False):
     events = matching_events(filters, user)
     parks = park_location_filters(Park.objects.filter(is_retired=False), filters)
     if filters.get('q'):
@@ -316,10 +331,11 @@ def displayed_parks(filters, user=None):
     parks = Park.objects.filter(is_retired=False).filter(
         Q(pk__in=parks.values('pk')) | Q(pk__in=events.values('park_id'))
     )
-    counts = events.order_by().values('park_id').annotate(total=Count('pk')).values('total')
-    parks = parks.annotate(
-        event_count=Coalesce(Subquery(counts.filter(park_id=OuterRef('pk')), output_field=IntegerField()), Value(0))
-    )
+    parks = parks.annotate(event_count=park_event_count(events))
+    if include_live_count:
+        parks = parks.annotate(
+            live_count=park_event_count(events.filter(status=EventStatus.SCHEDULED).filter(phase_q(EventPhase.LIVE)))
+        )
     if filters.get('events_only'):
         parks = parks.filter(event_count__gt=0)
     return parks.order_by('-event_count', 'name', 'pk')

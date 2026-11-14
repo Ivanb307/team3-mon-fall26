@@ -7,7 +7,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.views.generic import DetailView
 
-from events.models import Event
+from events.models import DEFAULT_PHASES, Event
 
 from .forms import ReviewForm
 from .models import Facility, Park
@@ -25,14 +25,6 @@ def facility_groups(facilities):
         group['lighted'] += facility.is_lighted
         group['accessible'] += facility.is_accessible
     return sorted(groups.values(), key=lambda group: (-group['count'], group['sport']))
-
-
-def with_availability(events):
-    """Set `spots_remaining` (None when unlimited) on events annotated with confirmed players."""
-    events = list(events)
-    for event in events:
-        event.spots_remaining = None if event.is_unlimited else max(event.capacity - event.confirmed_players, 0)
-    return events
 
 
 class ParkDetailView(DetailView):
@@ -81,14 +73,13 @@ class ParkDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         events = (
-            Event.objects.upcoming()
+            # US-4.8 (#117): live games stay listed until they end; ended ones drop off.
+            Event.objects.in_phases(DEFAULT_PHASES)
             .filter(park=self.object)
             .with_confirmed_players()
             .select_related('organizer__profile')
         )
-        context.update(
-            facility_groups=facility_groups(self.object.facilities.all()), park_events=with_availability(events)
-        )
+        context.update(facility_groups=facility_groups(self.object.facilities.all()), park_events=list(events))
         reviews = self.object.reviews.select_related('user__profile')
         context['reviews_page'] = Paginator(reviews, 10).get_page(self.request.GET.get('reviews_page'))
         context['own_review'] = (

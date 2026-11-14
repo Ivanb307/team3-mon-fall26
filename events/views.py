@@ -12,12 +12,12 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from parks.models import Facility, Park
-from parks.views import facility_groups, with_availability
+from parks.views import facility_groups
 
 from .forms import EventCreateForm, EventUpdateForm
 from .hosting import HostPlayingError, host_playing_error, set_host_playing
 from .hub import positive_url_number, remember_explore, split_panel
-from .models import Event, EventStatus, MESSAGE_MAX_LENGTH, Message, RSVP, RSVPStatus
+from .models import Event, EventPhase, EventStatus, MESSAGE_MAX_LENGTH, Message, RSVP, RSVPStatus
 from .explore import (
     configure_filter_form,
     displayed_parks,
@@ -27,12 +27,6 @@ from .explore import (
     matching_events,
     parse_filters,
 )
-
-
-def filter_events(params, user=None):
-    """Compatibility entry point; every Explore surface uses the shared engine."""
-    _, filters = parse_filters(params)
-    return matching_events(filters, user).select_related('park', 'organizer'), filters
 
 
 def personal_scope_redirect(request, filters):
@@ -49,11 +43,16 @@ def with_viewer_attending(events, user):
     )
 
 
-def event_cards(events, user):
-    """Explore event cards: spots left, and `viewer_hosting` for the Host badge (US-4.7)."""
-    events = with_availability(events)
+def event_cards(events, user, filters):
+    """Explore event cards: `viewer_hosting` for the Host badge (US-4.7), and `unlinked` for ended games.
+
+    US-4.8 (#117): in public Explore an ended game is a greyed-out row, not a link. My Events keep the link
+    so players can still open games they played.
+    """
+    events = list(events)
     for event in events:
         event.viewer_hosting = user.is_authenticated and event.organizer_id == user.pk
+        event.unlinked = filters['scope'] == 'all' and event.phase == EventPhase.ENDED
     return events
 
 
@@ -142,7 +141,7 @@ class EventListView(ListView):
                 park.facility_labels = facility_labels(park)
                 park.details_url = park_details_url(park)
         else:
-            context['events'] = event_cards(context['object_list'], self.request.user)
+            context['events'] = event_cards(context['object_list'], self.request.user, self.filters)
         context.update(
             filters=self.filters,
             filter_form=self.filter_form,
@@ -192,7 +191,9 @@ def serialize_event(event):
         'skill_level_label': event.get_skill_level_display(),
         'date': event.date.isoformat(),
         'time': event.time.strftime('%H:%M'),
+        'end_time': event.effective_end_time.strftime('%H:%M'),
         'starts_at': event.starts_at.isoformat(),
+        'ends_at': event.ends_at.isoformat(),
         'park': {
             'id': event.park_id,
             'name': event.park.name,
@@ -213,7 +214,9 @@ def upcoming_events_api(request):
     redirect = personal_scope_redirect(request, filters)
     if redirect:
         return redirect
-    events, _ = filter_events(request.GET, request.user)
+    # US-4.8 (#117): the feed lists upcoming games only, whatever ?phase= says.
+    filters['phase'] = [EventPhase.UPCOMING]
+    events = matching_events(filters, request.user).select_related('park', 'organizer')
     results = [serialize_event(event) for event in events[:200]]
     return JsonResponse({'count': len(results), 'results': results})
 
@@ -284,7 +287,7 @@ def park_preview_context(park, filters, user, page=1):
     events = (
         matching_events(filters, user).filter(park=park).with_confirmed_players().select_related('organizer__profile')
     )
-    park_events = event_cards(with_viewer_attending(events, user), user)
+    park_events = event_cards(with_viewer_attending(events, user), user, filters)
     close_params = filter_params(filters)
     if page > 1:
         close_params['page'] = str(page)
@@ -350,7 +353,7 @@ class EventCancelView(OrganizerOrAdminRequiredMixin, View):
                 messages.error(request, 'This event has already been cancelled.')
             elif event.status == EventStatus.REMOVED:
                 messages.error(request, 'This event has been removed.')
-            elif event.is_past:
+            elif event.has_started:
                 messages.error(request, 'This event has already started, so it can no longer be cancelled.')
             else:
                 event.status = EventStatus.CANCELLED
@@ -365,7 +368,7 @@ def edit_block_reason(event):
         return 'This event has been cancelled, so it can no longer be edited.'
     if event.status == EventStatus.REMOVED:
         return 'This event has been removed, so it can no longer be edited.'
-    if event.is_past:
+    if event.has_started:
         return 'This event has already started, so it can no longer be edited.'
     return None
 
@@ -450,7 +453,7 @@ class EventRemoveParticipantView(OrganizerOrAdminRequiredMixin, View):
             rsvp = get_object_or_404(RSVP.objects.select_for_update(), pk=rsvp_pk, event=event)
             if event.status != EventStatus.SCHEDULED:
                 messages.error(request, 'Participants can only be removed from scheduled events.')
-            elif event.is_past:
+            elif event.has_started:
                 messages.error(request, 'This event has already started, so participants can no longer be removed.')
             elif rsvp.status != RSVPStatus.ACTIVE:
                 messages.error(request, 'This participant is no longer attending this event.')
@@ -515,7 +518,9 @@ class EventDetailView(DetailView):
             event_block_reason = 'This event has been cancelled.'
         elif event.status == EventStatus.REMOVED:
             event_block_reason = 'This event has been removed.'
-        elif event.is_past:
+        elif event.has_ended:
+            event_block_reason = 'This event has ended.'
+        elif event.has_started:
             event_block_reason = 'This event has already started.'
 
         reason = event_block_reason
@@ -534,10 +539,11 @@ class EventDetailView(DetailView):
             regular_messages=regular_messages,
             has_discussion_messages=announcement_messages.exists() or regular_messages.exists(),
             latest_discussion_message_id=latest_discussion_message_id,
-            can_post_message=event.status == EventStatus.SCHEDULED,
+            can_post_message=event.discussion_open,
             message_max_length=MESSAGE_MAX_LENGTH,
             confirmed_players=confirmed_players,
-            spots_remaining=(None if event.capacity is None else max(event.capacity - confirmed_players, 0)),
+            spots_remaining=event.spots_remaining,
+            ended=event.phase == EventPhase.ENDED,
             user_rsvp=user_rsvp,
             rsvp_block_reason=reason,
             event_block_reason=event_block_reason,
@@ -565,7 +571,7 @@ def post_event_message(request, pk):
 
     with transaction.atomic():
         event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
-        if event.status != EventStatus.SCHEDULED:
+        if not event.discussion_open:
             error = 'Discussion is closed for this event.'
             if wants_json:
                 return JsonResponse({'error': error}, status=409)
@@ -607,7 +613,7 @@ def event_discussion_updates(request, pk):
     except ValueError:
         return JsonResponse({'error': 'Invalid message cursor.'}, status=400)
 
-    if event.status != EventStatus.SCHEDULED:
+    if not event.discussion_open:
         return JsonResponse({'messages': [], 'latest_id': after_id, 'discussion_open': False})
 
     new_messages = (
@@ -643,7 +649,7 @@ def join_block_reason(event, rsvp):
         return 'This event has been cancelled.'
     if event.status == EventStatus.REMOVED:
         return 'This event has been removed.'
-    if event.is_past:
+    if event.has_started:
         return 'This event has already started.'
     if event.capacity is not None and event.count_confirmed_players() >= event.capacity:
         return 'This event is full.'
@@ -698,7 +704,7 @@ def cancel_event_rsvp(request, pk):
         rsvp = RSVP.objects.filter(event=event, user=request.user).first()
         if event.status != EventStatus.SCHEDULED:
             messages.error(request, 'RSVPs can only be cancelled for scheduled events.')
-        elif event.is_past:
+        elif event.has_started:
             messages.error(request, 'This event has already started.')
         elif rsvp is None or rsvp.status != RSVPStatus.ACTIVE:
             messages.error(request, 'You are not attending this event.')

@@ -318,11 +318,8 @@ test('deletes a message over AJAX without navigating and shows the empty state',
       return message;
     },
   };
-  state.fetchResponse = async () => ({
-    ok: true,
-    json: async () => ({deleted: true, id: 4}),
-  });
-  const submitEvent = {
+  const createSubmitEvent = (defaultPrevented = false) => ({
+    defaultPrevented,
     prevented: false,
     preventDefault() {
       this.prevented = true;
@@ -332,8 +329,18 @@ test('deletes a message over AJAX without navigating and shows the empty state',
         return selector === '[data-message-delete-form]' ? deleteForm : null;
       },
     },
-  };
+  });
+  state.fetchResponse = async () => ({
+    ok: true,
+    json: async () => ({deleted: true, id: 4}),
+  });
 
+  await discussion.listeners.submit(createSubmitEvent(true));
+
+  assert.equal(state.fetchCalls.length, 0);
+  assert.equal(removed, false);
+
+  const submitEvent = createSubmitEvent();
   await discussion.listeners.submit(submitEvent);
 
   assert.equal(submitEvent.prevented, true);

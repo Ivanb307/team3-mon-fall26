@@ -615,6 +615,8 @@ class EventDetailView(DetailView):
             latest_discussion_message_id=latest_discussion_message_id,
             can_post_message=event.discussion_open,
             can_manage_own_messages=can_manage_own_messages(event, self.request.user),
+            can_moderate_messages=event.can_be_managed_by(self.request.user),
+            can_delete_own_messages=self.request.user.is_authenticated and event.discussion_open,
             message_max_length=MESSAGE_MAX_LENGTH,
             confirmed_players=confirmed_players,
             spots_remaining=event.spots_remaining,
@@ -675,6 +677,8 @@ def post_event_message(request, pk):
                                     'message': message,
                                     'event': event,
                                     'can_manage_own_messages': can_manage_own_messages(event, request.user),
+                                    'can_moderate_messages': event.can_be_managed_by(request.user),
+                                    'can_delete_own_messages': request.user.is_authenticated and event.discussion_open,
                                     'message_max_length': MESSAGE_MAX_LENGTH,
                                 },
                                 request=request,
@@ -691,6 +695,15 @@ def get_editable_message(request, event_pk, message_pk):
     if message.author_id != request.user.pk or not can_manage_own_messages(event, request.user):
         raise PermissionDenied
     return event, message
+
+
+def get_deletable_message(request, event_pk, message_pk):
+    event = get_object_or_404(Event, pk=event_pk)
+    message = get_object_or_404(Message.objects.select_related('author__profile'), pk=message_pk, event=event)
+    can_delete_as_author = message.author_id == request.user.pk and event.discussion_open
+    if not event.can_be_managed_by(request.user) and not can_delete_as_author:
+        raise PermissionDenied
+    return message
 
 
 @require_POST
@@ -728,6 +741,8 @@ def edit_event_message(request, pk, message_pk):
                             'event': event,
                             'is_announcement': is_announcement,
                             'can_manage_own_messages': can_manage_own_messages(event, request.user),
+                            'can_moderate_messages': event.can_be_managed_by(request.user),
+                            'can_delete_own_messages': request.user.is_authenticated and event.discussion_open,
                             'message_max_length': MESSAGE_MAX_LENGTH,
                         },
                         request=request,
@@ -744,7 +759,7 @@ def delete_event_message(request, pk, message_pk):
     if not request.user.is_authenticated:
         return redirect_to_login(event_url)
 
-    _, message = get_editable_message(request, pk, message_pk)
+    message = get_deletable_message(request, pk, message_pk)
     message_id = message.pk
     message.delete()
     if wants_json:
@@ -781,6 +796,8 @@ def event_discussion_updates(request, pk):
                         'event': event,
                         'is_announcement': is_announcement,
                         'can_manage_own_messages': can_manage_own_messages(event, request.user),
+                        'can_moderate_messages': event.can_be_managed_by(request.user),
+                        'can_delete_own_messages': request.user.is_authenticated and event.discussion_open,
                         'message_max_length': MESSAGE_MAX_LENGTH,
                     },
                     request=request,

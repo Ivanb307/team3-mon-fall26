@@ -27,6 +27,8 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
     }
   });
   discussion.addEventListener('submit', async (event) => {
+    if (event.defaultPrevented) return;
+
     const deleteForm = event.target.closest('[data-message-delete-form]');
     if (deleteForm) {
       event.preventDefault();

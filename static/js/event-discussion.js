@@ -50,7 +50,7 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
           return;
         }
 
-        addMessage(result.html, result.id);
+        addMessage(result.html, result.id, result.is_announcement);
         textarea.value = '';
       } catch {
         status.textContent = 'Could not post your message. Please try again.';

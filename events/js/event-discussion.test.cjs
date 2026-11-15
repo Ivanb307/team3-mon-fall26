@@ -166,3 +166,23 @@ test('keeps the poll cursor unchanged after local posting and skips duplicate ID
   assert.deepEqual(list.children.map((item) => item.dataset.messageId), ['1', '3', '2']);
   assert.equal(list.dataset.latestMessageId, '3');
 });
+
+test('inserts an AJAX-posted announcement before announcements and regular messages', async () => {
+  const {state, list, form} = setup({initialIds: [1, 2]});
+  list.children[0].announcement = true;
+  list.children[0].html = '<li class="event-discussion-message--announcement">Old announcement</li>';
+  list.children[1].html = '<li class="event-discussion-message">Regular message</li>';
+  state.fetchResponse = async () => ({
+    ok: true,
+    json: async () => ({
+      html: '<li class="event-discussion-message--announcement">New announcement</li>',
+      id: 3,
+      is_announcement: true,
+    }),
+  });
+
+  await form.listeners.submit({preventDefault() {}});
+
+  assert.deepEqual(list.children.map((item) => item.dataset.messageId), ['3', '1', '2']);
+  assert.equal(list.children[0].announcement, true);
+});

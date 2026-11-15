@@ -82,6 +82,24 @@ filters and page. Leaflet initializes when Map is first shown and stays mounted
 while List is open. With JavaScript disabled, the view links navigate normally
 and the Map page shows the list fallback.
 
+Filters, tabs, pages, pills, Clear filters, the empty-state buttons and the
+panel's "See all" also update without a reload (#123). The filter form's submit
+and any link inside Explore back to `/events/` go through the same history
+code. When the results would change (anything but the view, the open panel,
+empty values or defaults), it fetches `/events/results/`: the same
+`EventListView` with `partial=True`, returning JSON with the filter fields and
+pills, the counts, the list, the map's empty state, the map data URL, the open
+panel and the canonical URL for history. That request saves the state for Back
+to results, so no separate state request is needed. A separate URL keeps the
+browser's cache from ever showing JSON in place of the page. After a swap the
+filter fields are set up again (including the lookaheads), focus returns to the
+same field, and the counts are announced. Pins reload only when the filters
+change, and the map keeps its position while any new pin is in view; otherwise
+it fits the new results. A new page or tab brings the top of the list back into
+view if it had scrolled away. If the request fails, or there's no park data,
+the browser navigates normally. With JavaScript disabled, everything is a plain
+link or form submit, as before.
+
 The basic server-rendered controls and backend predicates establish the shared
 interface. Coordinate with the owners of #18/#19/#70/#75/#76 before replacing
 their UI: lookahead/pill selectors and richer empty-state/capacity/host controls

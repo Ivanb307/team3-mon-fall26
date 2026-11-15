@@ -20,6 +20,8 @@ from .views import (
 
 urlpatterns = [
     path('events/', EventListView.as_view(), name='event_list'),
+    # #123: the same Explore view, returning the changed results as JSON for an update without a reload.
+    path('events/results/', EventListView.as_view(partial=True), name='explore_results'),
     path('events/api/upcoming/', upcoming_events_api, name='event_list_api'),
     path('events/api/map/', event_map_api, name='event_map_api'),
     path('events/explore/state/', explore_state, name='explore_state'),

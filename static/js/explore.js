@@ -137,6 +137,49 @@
   const errorBox = root.querySelector('[data-map-error]');
   const status = root.querySelector('[data-map-status]');
   const viewLinks = root.querySelectorAll('[data-explore-view]');
+  // #122: "Back to results" returns to the same map center and zoom. The position is saved per set of
+  // results in sessionStorage and restored only when the page was reached through Back to results, which
+  // leaves a short-lived flag (static/js/explore-return.js). Shared links and Show on map keep their own
+  // view. Blocked or full storage is ignored, so the map still works without it.
+  const POSITION_KEY = 'nycactive.exploreMap';
+  const RETURN_KEY = 'nycactive.exploreReturn';
+  const RETURN_WINDOW_MS = 60 * 1000;
+  function store() {
+    try { return window.sessionStorage || null; } catch (_) { return null; }
+  }
+  function resultsKey() {
+    // The map feed's URL holds the server's canonical filters, so /events/?view=map and the
+    // remembered results URL for the same search give the same key. View, tab, page and the open
+    // panel don't change which parks the map shows.
+    if (!container?.dataset.mapUrl) return '';
+    const params = new URL(container.dataset.mapUrl, window.location.href).searchParams;
+    ['view', 'tab', 'page', 'panel', 'park'].forEach((name) => params.delete(name));
+    params.sort();
+    return params.toString();
+  }
+  function takeSavedPosition() {
+    try {
+      const storage = store();
+      if (!storage) return null;
+      const returnedAt = Number(storage.getItem(RETURN_KEY));
+      storage.removeItem(RETURN_KEY);
+      if (!returnedAt || Date.now() - returnedAt > RETURN_WINDOW_MS) return null;
+      const saved = JSON.parse(storage.getItem(POSITION_KEY) || 'null');
+      const valid = saved && saved.results === resultsKey()
+        && [saved.lat, saved.lng, saved.zoom].every(Number.isFinite);
+      return valid ? saved : null;
+    } catch (_) { return null; }
+  }
+  function savePosition() {
+    try {
+      const center = map.getCenter();
+      store()?.setItem(POSITION_KEY, JSON.stringify({
+        results: resultsKey(), lat: center.lat, lng: center.lng, zoom: map.getZoom(),
+      }));
+    } catch (_) { /* storage unavailable: nothing to restore later */ }
+  }
+  let savedPosition = takeSavedPosition();
+
   const viewInput = filtersForm.querySelector('input[name="view"]');
   let map;
   let group;
@@ -200,6 +243,7 @@
     if (!window.L || !L.markerClusterGroup) { failHard(); return; }
     try {
       map = L.map(container, {scrollWheelZoom: false}).setView([40.73, -73.94], 11);
+      map.on('moveend', savePosition);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19, referrerPolicy: 'strict-origin-when-cross-origin',
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -245,7 +289,10 @@
       group.addLayers(markers);
       const selectedPark = data.parks.find((park) => String(park.id) === root.dataset.focusPark);
       const fit = () => {
-        if (selectedPark) map.setView([selectedPark.lat, selectedPark.lng], 15);
+        if (savedPosition) {
+          map.setView([savedPosition.lat, savedPosition.lng], savedPosition.zoom);
+          savedPosition = null;
+        } else if (selectedPark) map.setView([selectedPark.lat, selectedPark.lng], 15);
         else if (markers.length) map.fitBounds(group.getBounds(), {padding:[36,36], maxZoom:15});
       };
       if (root.dataset.view === 'map' && !mapFailed) fit();

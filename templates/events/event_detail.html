@@ -3,6 +3,10 @@
 
 {% block title %}{{ event.display_title }} at {{ event.park.name }} · NYC Active{% endblock %}
 
+{# #122: Join, Leave, Cancel, Remove and "I'm playing" land on the roster, and posting without JavaScript on the #}
+{# discussion, so their messages show there. Everything else (e.g. Edit Event's save) stays at the top. #}
+{% block messages %}{% include "events/includes/section_messages.html" with section="page" %}{% endblock %}
+
 {% block content %}
 {% include "events/_hub_header.html" with active="explore" back=True %}
 <article class="event-card">
@@ -75,6 +79,7 @@
         <span class="event-spots">Unlimited spots</span>
       {% endif %}
     </div>
+    {% include "events/includes/section_messages.html" with section="attendance" %}
     {% if ended %}
     {% elif event.capacity %}
       <div class="event-spots-bar" aria-hidden="true"><span style="width: {% widthratio confirmed_players event.capacity 100 %}%"></span></div>

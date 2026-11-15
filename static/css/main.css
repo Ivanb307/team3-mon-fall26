@@ -372,6 +372,15 @@ a:focus-visible {
   border-color: var(--success-border);
 }
 
+/* #122: messages shown inside the event-page section an action returns to. */
+.messages--in-section {
+  margin-top: 12px;
+}
+
+.messages--in-section .alert {
+  margin-bottom: 12px;
+}
+
 /* Auth pages: image panel + form panel */
 
 .auth-page {

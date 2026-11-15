@@ -603,7 +603,7 @@ class EventRSVPTests(TestCase):
         rsvp = RSVP.objects.get(event=self.event, user=self.player)
         self.assertEqual(rsvp.status, RSVPStatus.ACTIVE)
         self.assertEqual(RSVP.objects.filter(event=self.event, status=RSVPStatus.ACTIVE).count(), 1)
-        self.assertRedirects(response, self.detail_url)
+        self.assertRedirects(response, self.detail_url + '#event-attendance-title')  # #122
         self.assertContains(response, '@player')
         self.assertContains(response, '1 spot left')
         self.assertContains(response, 'Attending · Cancel RSVP')
@@ -631,7 +631,7 @@ class EventRSVPTests(TestCase):
         response = self.client.post(self.rsvp_url, follow=True)
 
         old_rsvp.refresh_from_db()
-        self.assertRedirects(response, self.detail_url)
+        self.assertRedirects(response, self.detail_url + '#event-attendance-title')  # #122
         self.assertEqual(old_rsvp.status, RSVPStatus.ACTIVE)
         self.assertEqual(RSVP.objects.filter(event=self.event, user=self.player).count(), 1)
         self.assertEqual(RSVP.objects.filter(event=self.event, status=RSVPStatus.ACTIVE).count(), 1)
@@ -770,7 +770,7 @@ class EventRSVPTests(TestCase):
         response = self.client.post(self.cancel_rsvp_url, follow=True)
 
         rsvp = RSVP.objects.get(event=self.event, user=self.player)
-        self.assertRedirects(response, self.detail_url)
+        self.assertRedirects(response, self.detail_url + '#event-attendance-title')  # #122
         self.assertEqual(rsvp.status, RSVPStatus.CANCELLED)
         self.assertContains(response, 'Your RSVP has been cancelled.')
         self.assertNotContains(response, '@player')

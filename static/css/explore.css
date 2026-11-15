@@ -62,6 +62,7 @@
 .explore-preview:not(:modal) .explore-preview-close { display:none; }
 .park-panel-section { margin-top:26px; }
 .park-panel-muted { color:var(--muted); list-style:none; }
+.park-panel-hidden { margin:12px 0 0; font-size:.875rem; color:var(--muted); }
 .park-panel-actions { display:grid; gap:10px; padding-top:20px; margin-top:20px; border-top:1px solid var(--border); }
 .park-panel-all-events,.park-panel-close-link { display:inline-block; margin-top:16px; font-size:.875rem; font-weight:600; }
 .explore-preview .discover-link { grid-template-columns:auto minmax(0,1fr); padding:16px 12px; gap:12px; }

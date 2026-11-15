@@ -26,7 +26,10 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   let submits = 0;
   const viewInput = {value: initialView};
   nodes['.explore-filters'].querySelector = key => key === 'input[name="view"]' ? viewInput : checkbox;
-  const autosubmitFields = [element(), element()];  // borough select, zip select (US-2.3)
+  // US-4.9 (#118): the Phase checkboxes, with the default Upcoming and Live checked.
+  const phaseBoxes = ['upcoming', 'live', 'ended'].map(value => ({...element(), name: 'phase', value,
+    checked: value !== 'ended'}));
+  const autosubmitFields = [element(), element(), ...phaseBoxes];  // borough select, zip select (US-2.3)
   nodes['.explore-filters'].querySelectorAll = (key) => key === '[data-autosubmit]' ? autosubmitFields : [];
   nodes['.explore-filters'].requestSubmit = () => submits++;
   const dialog = nodes['[data-park-dialog]'];
@@ -106,7 +109,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   const clickView = view => root.listeners.click({button: 0, target: {
     closest: () => viewLinks.find(link => link.dataset.exploreView === view),
   }, preventDefault() {}});
-  return {nodes, markers, clusterOptions, fits, navigations, checkbox, dialog, autosubmitFields,
+  return {nodes, markers, clusterOptions, fits, navigations, checkbox, dialog, autosubmitFields, phaseBoxes,
     submits: () => submits, tileError, state, fitCount: () => fits, quickView, root, window, historyStep,
     viewInput, viewLinks, clickView};
 }
@@ -260,6 +263,23 @@ test('borough and zip-code changes submit the shared filter form (US-2.3)', asyn
   borough.listeners.change();
   zip.listeners.change();
   assert.equal(ui.submits(), 2);
+});
+
+test('phase checkboxes submit, but the last checked phase stays checked (US-4.9)', async () => {
+  const ui = await controller();
+  const [upcoming, live, ended] = ui.phaseBoxes;
+  ended.checked = true;
+  ended.listeners.change();
+  upcoming.checked = false;
+  upcoming.listeners.change();
+  live.checked = false;
+  live.listeners.change();
+  assert.equal(ui.submits(), 3);
+
+  ended.checked = false;
+  ended.listeners.change();
+  assert.equal(ui.submits(), 3, 'unchecking the last phase does not submit');
+  assert.equal(ended.checked, true, 'the last phase is checked again');
 });
 
 // US-2.5 (#20): empty and error states around the map.

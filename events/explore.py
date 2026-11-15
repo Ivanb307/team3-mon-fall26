@@ -120,8 +120,13 @@ class ExploreFilterForm(forms.Form):
     )
     events_only = forms.BooleanField(required=False, label='Only parks with events')
     # US-4.8 (#117): repeated ?phase= (upcoming, live, ended). None chosen means upcoming and live.
-    # The control for it is US-4.9 (#118).
-    phase = ValidChoices(required=False, choices=EventPhase.choices, label='Phase')
+    # US-4.9 (#118): shown as checkboxes that apply as soon as they change, like borough and zip.
+    phase = ValidChoices(
+        required=False,
+        choices=EventPhase.choices,
+        label='Phase',
+        widget=forms.CheckboxSelectMultiple(attrs={'data-autosubmit': ''}),
+    )
     park = forms.IntegerField(required=False, min_value=1)
     view = forms.ChoiceField(required=False, choices=[('map', 'Map'), ('list', 'List')])
     tab = forms.ChoiceField(required=False, choices=[('events', 'Events'), ('parks', 'Parks')])
@@ -148,12 +153,22 @@ class ExploreFilterForm(forms.Form):
         return data
 
 
+def earliest_public_date(now=None):
+    """The oldest date public Explore reaches back to: today's New York date minus the ended window (US-4.9)."""
+    today = (now or timezone.now()).astimezone(NYC_TZ).date()
+    return today - datetime.timedelta(days=ENDED_WINDOW_DAYS)
+
+
 def parse_filters(params):
     form = ExploreFilterForm(params)
     form.is_valid()
     filters = {name: form.cleaned_data.get(name) for name in form.fields}
     for name in ('zip', 'sport', 'facility', 'phase'):
         filters[name] = filters.get(name) or []
+    # US-4.9 (#118): one spelling per selection. Upcoming + Live is the default, so it's stored as no
+    # phase filter at all: no pill, a clean URL, and "Clear filters" returns to it.
+    phases = [phase for phase in EventPhase.values if phase in filters['phase']]
+    filters['phase'] = [] if set(phases) == set(DEFAULT_PHASES) else phases
     filters['view'] = filters.get('view') or 'map'
     filters['tab'] = filters.get('tab') or 'events'
     filters['scope'] = filters.get('scope') or 'all'
@@ -161,6 +176,10 @@ def parse_filters(params):
     # A malformed range must never accidentally become an open-ended range.
     if 'date_from' in form.errors or 'date_to' in form.errors:
         filters['date_from'] = filters['date_to'] = None
+    # US-4.9 (#118): public Explore reaches back 30 days at most, so an older From date (say, from an
+    # old shared link) moves up to the limit. My Events keep the full history.
+    if filters['scope'] == 'all' and filters['date_from'] and filters['date_from'] < earliest_public_date():
+        filters['date_from'] = earliest_public_date()
     return form, filters
 
 
@@ -193,16 +212,27 @@ def configure_filter_form(form, filters):
     # Keep a selected zip visible (and removable) even if its park was retired since it was chosen.
     zipcodes = sorted(set(zip_code_choices()) | set(filters['zip']))
     form.fields['zip'].widget.choices = [(z, z) for z in zipcodes]
-    if filters['scope'] != 'all':
-        form.data = form.data.copy()
-        form.data['events_only'] = '1'
+    data = form.data.copy()
+    # US-4.9 (#118): with no phase chosen, show the default (Upcoming and Live) as checked.
+    data.setlist('phase', filters['phase'] or [str(phase) for phase in DEFAULT_PHASES])
+    if filters['scope'] == 'all':
+        # The date pickers don't offer days before the 30-day limit, and a From date that was moved up
+        # shows the date actually used.
+        earliest = earliest_public_date().isoformat()
+        for name in ('date_from', 'date_to'):
+            form.fields[name].widget.attrs['min'] = earliest
+        if filters['date_from']:
+            data['date_from'] = filters['date_from'].isoformat()
+    else:
+        data['events_only'] = '1'
         form.fields['events_only'].widget.attrs['disabled'] = True
+    form.data = data
 
 
 def filter_pills(filters):
     params = filter_params(filters)
     pills = []
-    for name in ('q', 'borough', 'zip', 'sport', 'facility', 'when', 'date_from', 'date_to', 'skill', 'park'):
+    for name in ('q', 'borough', 'zip', 'sport', 'facility', 'when', 'date_from', 'date_to', 'skill', 'phase', 'park'):
         values = filters.get(name)
         if not values:
             continue
@@ -251,8 +281,7 @@ def matching_events(filters, user=None):
     if filters.get('scope', 'all') == 'all':
         events = Event.objects.filter(membership)
         # US-4.8 (#117): public Explore drops games that ended more than 30 days ago (New York date).
-        window_start = now.astimezone(NYC_TZ).date() - datetime.timedelta(days=ENDED_WINDOW_DAYS)
-        events = events.filter(date__gte=window_start)
+        events = events.filter(date__gte=earliest_public_date(now))
     else:
         if user is None or not user.is_authenticated:
             return Event.objects.none()

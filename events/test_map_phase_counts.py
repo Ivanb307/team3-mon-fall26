@@ -2,6 +2,7 @@
 
 import datetime
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
@@ -9,6 +10,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from parks.models import Facility, Park
+from .hub import EXPLORE_SESSION_KEY
 from .models import Event, EventStatus, NYC_TZ, RSVP
 from .views import event_map_api, explore_park_preview
 
@@ -71,6 +73,32 @@ class MapPhaseCountTests(TestCase):
                 self.assertEqual(response.context['panel_event_total'], total)
                 park = self.map_park(**params)
                 self.assertEqual((park['event_count'], park['live_count']), (total, live))
+
+    def test_hidden_ended_link_updates_selection_without_changing_phase_totals(self):
+        for phase in ('live', 'upcoming', 'ended'):
+            self.event(phase, title='Wanted game')
+            self.event(phase, title='Other game')
+        response = self.panel(q='Wanted', phase='live', borough='B')
+        totals = {'live': 1, 'upcoming': 1, 'ended': 1}
+        self.assertEqual(response.context['phase_counts'], totals)
+        self.assertEqual(response.context['hidden_ended_total'], 1)
+        self.assertEqual(response.context['panel_event_total'], 1)
+
+        shown = self.client.get(response.context['show_ended_url'])
+        self.assertEqual(shown.status_code, 200)
+        self.assertEqual(shown.context['selected_park'].pk, self.park.pk)
+        self.assertEqual(shown.context['phase_counts'], totals)
+        self.assertEqual(shown.context['hidden_ended_total'], 0)
+        self.assertEqual(shown.context['panel_event_total'], 2)
+        self.assertEqual(shown.context['filter_form']['phase'].value(), ['live', 'ended'])
+        self.assertEqual(shown.context['filters']['q'], 'Wanted')
+        pins = self.client.get(shown.context['map_url']).json()['parks']
+        pin = next(park for park in pins if park['id'] == self.park.pk)
+        self.assertEqual((pin['event_count'], pin['live_count']), (2, 1))
+        self.assertEqual(parse_qs(urlsplit(shown.context['events_url']).query)['phase'], ['live', 'ended'])
+        saved = parse_qs(self.client.session[EXPLORE_SESSION_KEY])
+        self.assertEqual(saved['phase'], ['live', 'ended'])
+        self.assertEqual(saved['q'], ['Wanted'])
 
     def test_counts_share_sport_keyword_skill_and_date_filters(self):
         for phase in ('live', 'upcoming', 'ended'):

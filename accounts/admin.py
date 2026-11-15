@@ -1,7 +1,9 @@
 from django.contrib import admin
+from django.contrib.admin.models import LogEntry
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied
+from django.template.defaultfilters import linebreaksbr
 
 User = get_user_model()
 
@@ -51,3 +53,66 @@ class UserAdmin(BaseUserAdmin):
 
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
+
+
+class ActorFilter(admin.SimpleListFilter):
+    """Only the accounts that have entries, rather than every user on the site."""
+
+    title = 'actor'
+    parameter_name = 'actor'
+
+    def lookups(self, request, model_admin):
+        actors = User.objects.filter(logentry__isnull=False).distinct().order_by('username')
+        return [(str(user.pk), user.username) for user in actors]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(user_id=self.value())
+        return queryset
+
+
+@admin.register(LogEntry)
+class LogEntryAdmin(admin.ModelAdmin):
+    """The audit trail (#52): every admin-site action plus in-app staff actions, read-only."""
+
+    list_display = ('action_time', 'actor', 'action', 'target_type', 'target', 'summary')
+    list_filter = (ActorFilter, 'action_flag', ('action_time', admin.DateFieldListFilter), 'content_type')
+    date_hierarchy = 'action_time'
+    search_fields = ('object_repr', 'change_message', 'user__username')
+    list_select_related = ('user', 'content_type')
+    fields = ('action_time', 'user', 'action_flag', 'content_type', 'object_id', 'object_repr', 'details')
+    readonly_fields = fields
+    ordering = ('-action_time',)
+
+    @admin.display(description='Actor', ordering='user__username')
+    def actor(self, entry):
+        return entry.user
+
+    @admin.display(description='Action', ordering='action_flag')
+    def action(self, entry):
+        return entry.get_action_flag_display()
+
+    @admin.display(description='Target type', ordering='content_type')
+    def target_type(self, entry):
+        return entry.content_type
+
+    @admin.display(description='Target', ordering='object_repr')
+    def target(self, entry):
+        return entry.object_repr
+
+    @admin.display(description='Change')
+    def summary(self, entry):
+        return entry.get_change_message().split('\n', 1)[0]
+
+    @admin.display(description='Details')
+    def details(self, entry):
+        return linebreaksbr(entry.get_change_message(), autoescape=True)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

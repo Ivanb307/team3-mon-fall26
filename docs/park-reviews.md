@@ -20,15 +20,16 @@ No new AWS service or paid dependency is needed.
 
 ## Integration boundaries
 
-- `ReviewForm` is shared for future owner editing. #41 owns edit/delete URLs and
-  authorization. The own-review area resolves optional `park_review_edit(pk)`
-  and `park_review_delete(pk)` route names; no unavailable control is shown.
-  The Edit/Delete part of #40's existing-review scenario depends on #41.
+- Owners edit and delete their own review (#41). Edit opens the review as a form in
+  place (`?edit_review=1`), which POSTs to `park_review_edit(pk)`; Delete asks for
+  confirmation and POSTs to `park_review_delete(pk)`. Both are POST-only and use
+  `ReviewForm`; anyone but the author gets 403 and the review is unchanged.
+  Administrator removal is #43.
 - Standard Django admin registration permits existing staff with the appropriate
   model permissions to manage Review records. Custom inline administrator
   removal, moderation permissions, and its audit snapshot remain #43/#52.
 - #42's freshness tests exercise model editing, deletion and real Django-admin
-  deletion; this bundle does not implement #41's owner-management endpoints.
+  deletion; `parks.test_review_owner` covers #41's owner edit and delete.
 - Rating summaries use `ParkQuerySet.with_review_summary()` at presentation
   boundaries. Shared event/filter membership, map clustering, event totals,
   event management and account features are unchanged.

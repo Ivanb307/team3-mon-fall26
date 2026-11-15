@@ -1,16 +1,18 @@
 from django.contrib import messages
 from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.views import View
 from django.views.generic import DetailView
 
 from events.models import DEFAULT_PHASES, Event
 
 from .forms import ReviewForm
-from .models import Facility, Park
+from .models import Facility, Park, Review
 
 REVIEW_EXISTS_MESSAGE = 'You have already reviewed this park.'
 
@@ -86,4 +88,58 @@ class ParkDetailView(DetailView):
             reviews.filter(user=self.request.user).first() if self.request.user.is_authenticated else None
         )
         context.setdefault('review_form', ReviewForm())
+        # #41: the owner's Edit button opens their review as a form (?edit_review=1).
+        own_review = context['own_review']
+        if own_review and 'review_edit_form' not in context and self.request.GET.get('edit_review') == '1':
+            context['review_edit_form'] = ReviewForm(instance=own_review)
         return context
+
+
+def reviews_url(park_pk):
+    return reverse('park_detail', kwargs={'pk': park_pk}) + '#reviews'
+
+
+class OwnReviewView(View):
+    """Base for a member's edit and delete of their own review (#41). POST only.
+
+    Anonymous users go to login and back to the park's reviews; anyone but the author gets 403
+    and the review is unchanged. Administrator removal is #43.
+    """
+
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        review = get_object_or_404(Review.objects.select_related('park'), pk=pk)
+        if not request.user.is_authenticated:
+            return redirect_to_login(reviews_url(review.park_id))
+        if review.user_id != request.user.pk:
+            raise PermissionDenied
+        return self.handle(request, review)
+
+    def done(self, review):
+        # A retired park has no page to return to.
+        return redirect('event_list' if review.park.is_retired else reviews_url(review.park_id))
+
+
+class ReviewUpdateView(OwnReviewView):
+    def handle(self, request, review):
+        form = ReviewForm(request.POST, instance=review)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Your review has been updated.')
+            return self.done(review)
+        if review.park.is_retired:
+            messages.error(request, ' '.join(error for errors in form.errors.values() for error in errors))
+            return self.done(review)
+        # Show the park page again with the edit form and its errors.
+        page = ParkDetailView()
+        page.setup(request, pk=review.park_id)
+        page.object = page.get_object()
+        return page.render_to_response(page.get_context_data(review_edit_form=form))
+
+
+class ReviewDeleteView(OwnReviewView):
+    def handle(self, request, review):
+        review.delete()
+        messages.success(request, 'Your review has been deleted.')
+        return self.done(review)

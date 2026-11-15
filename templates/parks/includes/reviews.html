@@ -1,19 +1,27 @@
 {% if own_review %}
   <aside class="park-review-own" aria-labelledby="own-review-title">
     <h3 id="own-review-title">Your review</h3>
-    {% include "parks/includes/review.html" with review=own_review only %}
-    {# Owner edit/delete controls activate when #41 provides these routes. #}
-    {% url 'park_review_edit' pk=own_review.pk as review_edit_url %}
-    {% url 'park_review_delete' pk=own_review.pk as review_delete_url %}
-    {% if review_edit_url or review_delete_url %}
-    <div class="park-review-actions">
-      {% if review_edit_url %}<a class="btn btn--ghost" href="{{ review_edit_url }}">Edit</a>{% endif %}
-      {% if review_delete_url %}
-      <form method="post" action="{{ review_delete_url }}" onsubmit="return confirm('Delete your review?');">
-        {% csrf_token %}<button class="btn btn--ghost" type="submit">Delete</button>
+    {% url 'park_detail' pk=park.pk as park_url %}
+    {% if review_edit_form %}
+      {# #41: the owner edits their review in place; Cancel returns to it unchanged. #}
+      <form class="park-review-form" method="post" action="{% url 'park_review_edit' pk=own_review.pk %}" aria-label="Edit your review">
+        {% csrf_token %}
+        {% include "includes/form_errors.html" with form=review_edit_form %}
+        {% include "includes/form_field.html" with field=review_edit_form.rating %}
+        {% include "includes/form_field.html" with field=review_edit_form.body %}
+        <div class="park-review-actions">
+          <button class="btn btn--primary" type="submit">Save changes</button>
+          <a class="btn btn--ghost" href="{{ park_url }}#reviews">Cancel</a>
+        </div>
       </form>
-      {% endif %}
-    </div>
+    {% else %}
+      {% include "parks/includes/review.html" with review=own_review only %}
+      <div class="park-review-actions">
+        <a class="btn btn--ghost" href="{{ park_url }}?edit_review=1#reviews">Edit</a>
+        <form method="post" action="{% url 'park_review_delete' pk=own_review.pk %}" onsubmit="return confirm('Delete your review? You can write a new one afterwards.');">
+          {% csrf_token %}<button class="btn btn--ghost" type="submit">Delete</button>
+        </form>
+      </div>
     {% endif %}
   </aside>
 {% elif user.is_authenticated %}

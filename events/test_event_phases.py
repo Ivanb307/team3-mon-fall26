@@ -147,8 +147,9 @@ class ExplorePhaseTests(PhaseTestCase):
     def test_filter_form_keeps_the_phase(self):
         response = self.client.get(reverse('event_list'), {'phase': ['ended', 'live']})
 
-        self.assertContains(response, '<input type="hidden" name="phase" value="ended">', html=True)
-        self.assertContains(response, '<input type="hidden" name="phase" value="live">', html=True)
+        # US-4.9 (#118) replaced the hidden inputs with the Phase checkboxes.
+        self.assertEqual(response.context['filter_form']['phase'].value(), ['live', 'ended'])
+        self.assertRegex(response.content.decode(), r'<input type="checkbox" name="phase" value="ended"[^>]* checked>')
 
     def test_list_queries_dont_grow_with_more_games(self):
         def count_queries():

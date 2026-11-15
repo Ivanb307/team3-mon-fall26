@@ -36,10 +36,10 @@ The existing feed presentation stays in place until the map/list PR lands.
 | repeated `sport` | `Activity` values; OR. Events match sport; independently matching parks use active mapped facilities. A sport without a facility mapping does not narrow parks. |
 | repeated `facility` | Exact `Facility.SPORT_FIELDS` tokens on active facilities; AND |
 | `when=today` | New York calendar date |
-| `date_from`, `date_to` | Inclusive ISO date range; invalid/reversed ranges show a message and ignore both endpoints |
+| `date_from`, `date_to` | Inclusive ISO date range; invalid/reversed ranges show a message and ignore both endpoints. In public Explore a `date_from` older than 30 days moves up to the limit, and both pickers have that `min` (US-4.9 / #118); personal scopes have no limit |
 | `skill` | Specific level also includes all-skill events |
 | `scope` | `all`, `mine`, `attending`, `hosting`; personal scopes force `events_only` and include future cancelled/removed events |
-| repeated `phase` | `upcoming`, `live`, `ended` (US-4.8 / #117); OR. None chosen means `upcoming` + `live`; unknown values are ignored. Public Explore only keeps games that ended in the last 30 days (`ENDED_WINDOW_DAYS`, by New York date); personal scopes keep every ended game. The JSON feed is always `upcoming` only. |
+| repeated `phase` | `upcoming`, `live`, `ended` (US-4.8 / #117); OR. None chosen means `upcoming` + `live`; unknown values are ignored. Public Explore only keeps games that ended in the last 30 days (`ENDED_WINDOW_DAYS`, by New York date); personal scopes keep every ended game. The JSON feed is always `upcoming` only. US-4.9 (#118) adds the Phase checkboxes, which apply as soon as they change. At least one stays checked: unchecking the last one checks it again (without JavaScript, the server shows the default). Choosing exactly `upcoming` + `live` is stored as no phase filter, so the default never gets a pill or a `phase` parameter; each other choice gets a removable pill, and Clear filters returns to the default. When `ended` isn't chosen, the park panel says how many of the park's ended games are hidden and links to the same panel with `ended` added. |
 | `events_only=1` | Only parks with a positive matching-event count |
 | `park` | Active park ID; invalid, unknown or retired IDs ignored |
 | `view`, `tab` | Preserved state: map/list, events/parks; defaults map/events. Presentation follows in the next PR. |

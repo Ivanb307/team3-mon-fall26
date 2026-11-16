@@ -84,6 +84,7 @@ class AdministratorAccessTests(AdminAccessTestCase):
             with self.subTest(model=name):
                 self.assertEqual(self.client.get(reverse(f'admin:{name}_changelist')).status_code, 200)
         self.assertEqual(self.client.get(reverse('admin:auth_user_changelist')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('admin:admin_logentry_changelist')).status_code, 200)
 
     def test_administrator_can_log_in_to_admin_with_username(self):
         response = self.client.post(

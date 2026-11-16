@@ -113,7 +113,7 @@ class EventParticipantRemovalTests(EventManagementTestCase):
         response = self.client.post(self.url, follow=True)
 
         self.rsvp.refresh_from_db()
-        self.assertRedirects(response, self.detail_url)
+        self.assertRedirects(response, self.detail_url + '#event-attendance-title')  # #122
         self.assertEqual(self.rsvp.status, RSVPStatus.REMOVED)
         self.assertContains(response, 'Participant removed from the event.')
         self.assertNotContains(response, '@manage-player')
@@ -239,7 +239,7 @@ class EventCancelTests(EventManagementTestCase):
     def test_organizer_cancels_and_the_row_is_kept(self):
         self.client.force_login(self.host)
         response = self.client.post(self.url, follow=True)
-        self.assertRedirects(response, self.detail_url)
+        self.assertRedirects(response, self.detail_url + '#event-attendance-title')  # #122
         self.assert_status(EventStatus.CANCELLED)
         self.assertContains(response, 'Cancelled by the host')
         self.assertContains(response, 'Your event has been cancelled.')

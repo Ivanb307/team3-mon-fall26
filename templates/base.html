@@ -59,7 +59,8 @@
 
   {% block main %}
     <main class="site-main">
-      {% include "includes/messages.html" %}
+      {# #122: pages that send actions back to a section show those messages there instead. #}
+      {% block messages %}{% include "includes/messages.html" %}{% endblock %}
       {% block content %}{% endblock %}
     </main>
   {% endblock %}

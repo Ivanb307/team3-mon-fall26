@@ -115,7 +115,7 @@ class EventDiscussionTests(TestCase):
         )
 
         message = Message.objects.get(event=self.event)
-        self.assertRedirects(response, self.event.get_absolute_url())
+        self.assertRedirects(response, self.event.get_absolute_url() + '#event-discussion-title')  # #122
         self.assertEqual(message.author, self.player)
         self.assertEqual(message.body, 'Can we bring extra balls?')
         self.assertFalse(message.is_announcement)

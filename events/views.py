@@ -624,6 +624,7 @@ class EventDetailView(DetailView):
             can_manage=can_manage,
             can_cancel_event=can_manage and event_block_reason is None,
             can_edit_event=can_manage and event_block_reason is None,
+            can_announce=self.request.user.is_authenticated and self.request.user == event.organizer,
             active_rsvps=active_rsvps,
             announcement_messages=announcement_messages,
             regular_messages=regular_messages,
@@ -661,6 +662,10 @@ def post_event_message(request, pk):
 
     with transaction.atomic():
         event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+        is_announcement = request.POST.get('is_announcement') == 'true'
+        if is_announcement and request.user != event.organizer:
+            raise PermissionDenied
+
         if not event.discussion_open:
             error = 'Discussion is closed for this event.'
             if wants_json:
@@ -679,17 +684,26 @@ def post_event_message(request, pk):
                     return JsonResponse({'error': error}, status=400)
                 messages.error(request, error, extra_tags=DISCUSSION_TAG)
             else:
-                message = Message.objects.create(event=event, author=request.user, body=body)
+                message = Message.objects.create(
+                    event=event,
+                    author=request.user,
+                    body=body,
+                    is_announcement=is_announcement,
+                )
                 if wants_json:
                     message = Message.objects.select_related('author__profile').get(pk=message.pk)
                     return JsonResponse(
                         {
                             'html': render_to_string(
                                 'events/includes/event_message.html',
-                                {'message': message},
+                                {
+                                    'message': message,
+                                    'is_announcement': is_announcement,
+                                },
                                 request=request,
                             ),
                             'id': message.pk,
+                            'is_announcement': is_announcement,
                         }
                     )
     return redirect(event_url + DISCUSSION_ANCHOR)

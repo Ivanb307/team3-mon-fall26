@@ -27,6 +27,7 @@ from .explore import (
     matching_events,
     parse_filters,
     selected_phases,
+    with_park_phase_counts,
 )
 
 # #122: actions on the event page return to the section they came from, with their message there.
@@ -119,12 +120,17 @@ def park_details_url(park):
 
 
 class EventListView(ListView):
-    """Explore Events: one filter state, a map and two paginated list tabs."""
+    """Explore Events: one filter state, a map and two paginated list tabs.
+
+    With `partial=True` (the `explore_results` URL) the same view returns the changed pieces as JSON, so
+    filters, tabs and pages update without a reload (#123). It still saves the state for Back to results.
+    """
 
     model = Event
     template_name = 'events/event_list.html'
     context_object_name = 'events'
     paginate_by = 20
+    partial = False
 
     def dispatch(self, request, *args, **kwargs):
         params, self.panel_id, self.legacy_panel = split_panel(request.GET)
@@ -177,7 +183,9 @@ class EventListView(ListView):
         page = context['page_obj'].number
         if self.panel_id:
             selected = (
-                displayed_parks(self.filters, self.request.user)
+                with_park_phase_counts(
+                    displayed_parks(self.filters, self.request.user), self.filters, self.request.user
+                )
                 .filter(pk=self.panel_id)
                 .with_review_summary()
                 .prefetch_related(Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active')))
@@ -190,6 +198,43 @@ class EventListView(ListView):
                     context['focus_park'] = selected.pk
         remember_explore(self.request, self.filters, page, panel_id=selected.pk if selected else None)
         return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if not self.partial:
+            return super().render_to_response(context, **response_kwargs)
+        return JsonResponse(explore_results_payload(self.request, context))
+
+
+def explore_results_payload(request, context):
+    """The pieces of Explore that change with the filters, tab or page, for a swap without a reload (#123).
+
+    `url` is the canonical address for the browser's history. Without park data there's no list or map
+    to update, so the page reloads instead.
+    """
+    if not context['has_park_data']:
+        return {'reload': True}
+    params = context['explore_params'].copy()
+    page = context['page_obj'].number
+    if page > 1:
+        params['page'] = str(page)
+    selected = context.get('selected_park')
+    if selected:
+        params['panel'] = panel_param(selected.pk)
+
+    def render(template, **extra):
+        return render_to_string(template, {**context, **extra}, request=request)
+
+    map_state = context['map_empty_state']
+    return {
+        'url': reverse('event_list') + '?' + params.urlencode(),
+        'filters_html': render('events/includes/explore_filter_fields.html'),
+        'counts_html': render('events/includes/explore_counts.html'),
+        'list_html': render('events/includes/explore_list.html'),
+        'map_empty_html': render('events/includes/empty_state.html', state=map_state, map=True) if map_state else '',
+        'map_url': context['map_url'],
+        'panel_id': str(selected.pk) if selected else '',
+        'panel_html': render('events/includes/park_preview.html', park=selected) if selected else '',
+    }
 
 
 def serialize_event(event):
@@ -239,7 +284,9 @@ def event_map_api(request):
     redirect = personal_scope_redirect(request, filters)
     if redirect:
         return redirect
-    parks = displayed_parks(filters, request.user).exclude(latitude=None).exclude(longitude=None)
+    parks = (
+        displayed_parks(filters, request.user, include_live_count=True).exclude(latitude=None).exclude(longitude=None)
+    )
     results = [
         {
             'id': p.pk,
@@ -248,6 +295,7 @@ def event_map_api(request):
             'lat': float(p.latitude),
             'lng': float(p.longitude),
             'event_count': p.event_count,
+            'live_count': p.live_count,
             'preview_url': reverse('explore_park_preview', kwargs={'pk': p.pk}),
         }
         for p in parks
@@ -268,7 +316,7 @@ def explore_park_preview(request, pk):
     if redirect:
         return redirect
     park = get_object_or_404(
-        displayed_parks(filters, request.user)
+        with_park_phase_counts(displayed_parks(filters, request.user), filters, request.user)
         .with_review_summary()
         .prefetch_related(Prefetch('facilities', queryset=Facility.objects.filter(feature_status='Active'))),
         pk=pk,
@@ -323,6 +371,7 @@ def park_preview_context(park, filters, user, page=1):
         'events_url': reverse('event_list') + '?' + params.urlencode(),
         'park_events': park_events,
         'panel_event_total': len(park_events),
+        'phase_counts': {phase: getattr(park, f'{phase}_count') for phase in EventPhase.values},
         'hidden_ended_total': hidden_ended_total,
         'show_ended_url': reverse('event_list') + '?' + show_ended_params.urlencode(),
         'in_park_panel': True,

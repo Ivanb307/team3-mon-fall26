@@ -192,3 +192,33 @@ not change event creation, joining, database models, or deployment settings.
 badges, URL/session restoration, missing data, escaping, invalid parks and a
 three-query budget that stays constant as organizers and RSVP rows increase.
 The JavaScript controller tests verify panel navigation, history and legacy map focus.
+
+## Phase counts on the map and panel (US-4.10 / #119)
+
+`displayed_parks(..., include_live_count=True)` adds `live_count` for the map API.
+It counts scheduled live games **within the selected phases and all other
+filters**. The existing `event_count` still drives pin and cluster numbers.
+Pins are orange when `live_count > 0`, green for other matching events, and muted
+when empty. A cluster is orange if any child pin has matching live games; its
+number remains the sum of child event counts. The API still uses two data queries.
+
+`with_park_phase_counts()` annotates the park selected for either the initial
+page or the preview endpoint. `park_preview_context()` exposes these as
+`phase_counts` (`live`, `upcoming`, `ended`). These totals ignore only the phase
+selection, keep all other shared filters and scope permissions, and exclude
+cancelled/removed games. Public ended counts keep the existing 30-day window;
+personal scopes keep historical access. The selected event cards and their
+heading retain their existing membership, including labelled cancelled/removed
+future games in personal scopes. The phase breakdown explains that its counts
+span all phases, so it may differ from the selected-card total.
+
+Correlated count annotations use the existing park query: the panel still uses
+three data queries regardless of event, organizer, or RSVP count. No schema or
+AWS changes are needed. Tests: `events.test_map_phase_counts`,
+`events.test_park_panel`, and `events/js/explore.test.cjs`.
+
+Integration with #118 (merged in #131): the shared phase selector, pills, date
+controls, and hidden-ended link work with these counts. Following the panel's
+"show" link adds ended games to the selected cards and map count while keeping
+the all-phase breakdown unchanged. The existing filter bar and date policy are
+reused rather than duplicated.

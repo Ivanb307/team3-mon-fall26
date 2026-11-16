@@ -34,7 +34,7 @@ class FormData {
 }
 
 async function controller({data, reject = false, leaflet = true, selected = false, mapEmpty = false,
-  noParkData = false, initialView = 'map', inView = false, resultsFail = false} = {}) {
+  noParkData = false, initialView = 'map', inView = false, resultsFail = false, storage} = {}) {
   const nodes = {};
   const state = {reject, clears: 0, fetches: 0, maps: 0, saves: [], previews: [], results: []};
   for (const key of ['.explore-filters', '[data-park-dialog]', '[data-close-preview]',
@@ -81,7 +81,10 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   let clusterOptions;
   let fits = 0;
   let tileError;
-  const map = {setView(position, zoom) {state.mapView = {position, zoom}; return this;},
+  const map = {listeners: {}, center: {lat: 40.73, lng: -73.94}, zoom: 11,
+    on(name, handler) {this.listeners[name] = handler; return this;},
+    getCenter() {return this.center;}, getZoom() {return this.zoom;},
+    setView(position, zoom) {state.mapView = {position, zoom}; return this;},
     fitBounds() {fits++;}, eachLayer() {}, invalidateSize(options) {state.invalidated = options;},
     getBounds: () => ({contains: () => inView})};
   const group = {addTo() {return this;}, clearLayers() {state.clears++;}, addLayers() {}, getBounds() {return {};}};
@@ -101,6 +104,8 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   const window = {...element(), L: leaflet ? L : undefined, location: {
     href: `http://localhost/events/?view=${initialView}&zip=11211&zip=11222&page=2` + (selected ? '&park=7&panel=1' : ''),
     assign(url) {navigations.push(new URL(url));}, reload() {navigations.push(new URL(this.href));}}};
+  // #122: `storage` returns the sessionStorage object, or throws like a browser that blocks it.
+  if (storage) Object.defineProperty(window, 'sessionStorage', {get: storage});
   const entries = [window.location.href];
   let index = 0;
   window.history = {
@@ -153,7 +158,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   };
   return {nodes, markers, clusterOptions, fits, navigations, checkbox, dialog, autosubmitFields, phaseBoxes,
     submits: () => submits, tileError, state, fitCount: () => fits, quickView, root, window, historyStep,
-    viewInput, viewLinks, clickView, clickLink, submitFilters};
+    viewInput, viewLinks, clickView, clickLink, submitFilters, map};
 }
 
 const parks = [
@@ -478,4 +483,83 @@ test('without park data the filter form submits normally', async () => {
   assert.equal(await ui.submitFilters([['borough', 'B']]), false);
   assert.equal(await ui.clickLink('?view=list&tab=parks'), false);
   assert.equal(ui.state.results.length, 0);
+});
+
+// #122: Back to results returns to the same map center and zoom.
+function memoryStorage(items = {}) {
+  const data = {...items};
+  return {data, getItem: key => (key in data ? data[key] : null), setItem(key, value) {data[key] = String(value);},
+    removeItem(key) {delete data[key];}};
+}
+const RESULTS = 'zip=11211&zip=11222';  // the map feed's filters, without view/tab/page/panel
+const saved = (results = RESULTS) => JSON.stringify({results, lat: 40.75, lng: -73.99, zoom: 14});
+
+test('Back to results restores the saved center and zoom instead of re-fitting', async () => {
+  const storage = memoryStorage({'nycactive.exploreMap': saved(), 'nycactive.exploreReturn': String(Date.now())});
+  const ui = await controller({data: {parks, unmapped_event_count: 0}, storage: () => storage});
+  assert.deepEqual(Array.from(ui.state.mapView.position), [40.75, -73.99]);
+  assert.equal(ui.state.mapView.zoom, 14);
+  assert.equal(ui.fits, 0);
+  assert.equal(storage.data['nycactive.exploreReturn'], undefined, 'the return flag is used once');
+});
+
+test('moving the map saves its position for these results, ignoring view, tab, page and panel', async () => {
+  const storage = memoryStorage();
+  const ui = await controller({data: {parks, unmapped_event_count: 0}, storage: () => storage});
+  ui.map.center = {lat: 40.68, lng: -73.97};
+  ui.map.zoom = 13;
+  ui.map.listeners.moveend();
+  assert.deepEqual(JSON.parse(storage.data['nycactive.exploreMap']), {results: RESULTS, lat: 40.68, lng: -73.97, zoom: 13});
+});
+
+test('shared links and Show on map ignore a saved position', async () => {
+  // No return flag: someone opened a link, so the map fits the results as usual.
+  const shared = memoryStorage({'nycactive.exploreMap': saved()});
+  let ui = await controller({data: {parks, unmapped_event_count: 0}, storage: () => shared});
+  assert.equal(ui.fits, 1);
+  // Show on map (park=7&panel=1) still focuses on the chosen park.
+  const showOnMap = memoryStorage({'nycactive.exploreMap': saved()});
+  ui = await controller({data: {parks, unmapped_event_count: 0}, selected: true, storage: () => showOnMap});
+  assert.deepEqual(Array.from(ui.state.mapView.position), [40.7, -73.9]);
+  assert.equal(ui.state.mapView.zoom, 15);
+});
+
+test('a stale return flag or a position saved for other results is not restored', async () => {
+  for (const items of [
+    {'nycactive.exploreMap': saved(), 'nycactive.exploreReturn': String(Date.now() - 5 * 60 * 1000)},
+    {'nycactive.exploreMap': saved('zip=10001'), 'nycactive.exploreReturn': String(Date.now())},
+    {'nycactive.exploreMap': '{not json', 'nycactive.exploreReturn': String(Date.now())},
+  ]) {
+    const storage = memoryStorage(items);
+    const ui = await controller({data: {parks, unmapped_event_count: 0}, storage: () => storage});
+    assert.equal(ui.fits, 1);
+    assert.equal(storage.data['nycactive.exploreReturn'], undefined);
+  }
+});
+
+test('blocked sessionStorage does not break the map', async () => {
+  const blocked = () => { throw new Error('SecurityError'); };
+  const ui = await controller({data: {parks, unmapped_event_count: 0}, storage: blocked});
+  assert.equal(ui.fits, 1);
+  assert.doesNotThrow(() => ui.map.listeners.moveend());
+  assert.equal(ui.nodes['[data-list-fallback]'].hidden, true);
+});
+
+test('Back to results leaves a return flag, and a blocked sessionStorage is ignored', () => {
+  const returnSource = fs.readFileSync('static/js/explore-return.js', 'utf8');
+  function run(sessionStorage) {
+    let onClick;
+    const window = {};
+    Object.defineProperty(window, 'sessionStorage', {get: sessionStorage});
+    vm.runInNewContext(returnSource, {window, String, Date,
+      document: {addEventListener: (name, handler) => { onClick = handler; }}});
+    return target => onClick({target: {closest: selector => (target && selector === '[data-explore-return]' ? {} : null)}});
+  }
+  const storage = memoryStorage();
+  const click = run(() => storage);
+  click(false);
+  assert.equal(storage.data['nycactive.exploreReturn'], undefined, 'other links leave no flag');
+  click(true);
+  assert.ok(Date.now() - Number(storage.data['nycactive.exploreReturn']) < 1000);
+  assert.doesNotThrow(() => run(() => { throw new Error('SecurityError'); })(true));
 });

@@ -1,5 +1,6 @@
 <section class="event-discussion" aria-labelledby="event-discussion-title">
   <h2 id="event-discussion-title">Discussion</h2>
+  {% include "events/includes/section_messages.html" with section="discussion" %}
   <ol class="event-discussion-list"
       data-event-discussion-list
       data-updates-url="{% url 'event_discussion_updates' event.pk %}"
@@ -21,6 +22,12 @@
         {% csrf_token %}
         <label for="event-message-body">Your message</label>
         <textarea id="event-message-body" name="body" rows="4" maxlength="{{ message_max_length }}" required></textarea>
+        {% if can_announce %}
+          <label class="event-discussion-announce-option">
+            <input type="checkbox" name="is_announcement" value="true">
+            Post as announcement
+          </label>
+        {% endif %}
         <button class="btn btn--primary" type="submit">Post message</button>
         <p class="event-discussion-status" role="status" aria-live="polite" data-event-discussion-status></p>
       </form>

@@ -4,7 +4,7 @@ from .models import Review
 
 
 class ReviewForm(forms.ModelForm):
-    """Shared validation for creating a review and the future owner-edit flow (#41)."""
+    """Shared validation for creating a review and editing your own (#41)."""
 
     rating = forms.TypedChoiceField(
         coerce=int,

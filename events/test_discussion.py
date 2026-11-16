@@ -115,7 +115,7 @@ class EventDiscussionTests(TestCase):
         )
 
         message = Message.objects.get(event=self.event)
-        self.assertRedirects(response, self.event.get_absolute_url())
+        self.assertRedirects(response, self.event.get_absolute_url() + '#event-discussion-title')  # #122
         self.assertEqual(message.author, self.player)
         self.assertEqual(message.body, 'Can we bring extra balls?')
         self.assertFalse(message.is_announcement)
@@ -271,6 +271,44 @@ class EventDiscussionTests(TestCase):
                 self.assertIsNotNone(message.edited_at)
                 self.assertContains(response, 'Edited')
                 message.delete()
+
+    def test_only_organizer_sees_announcement_checkbox(self):
+        self.client.force_login(self.host)
+        organizer_page = self.client.get(self.event.get_absolute_url())
+        self.assertContains(organizer_page, 'name="is_announcement"')
+        self.assertContains(organizer_page, 'Post as announcement')
+
+        self.client.force_login(self.player)
+        player_page = self.client.get(self.event.get_absolute_url())
+        self.assertNotContains(player_page, 'name="is_announcement"')
+        self.assertNotContains(player_page, 'Post as announcement')
+
+    def test_organizer_can_post_an_announcement_over_ajax(self):
+        self.client.force_login(self.host)
+
+        response = self.client.post(
+            reverse('event_message_post', kwargs={'pk': self.event.pk}),
+            {'body': 'Schedule update', 'is_announcement': 'true'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['is_announcement'])
+        self.assertContains(response, 'Organizer announcement')
+        message = Message.objects.get(event=self.event)
+        self.assertEqual(message.author, self.host)
+        self.assertTrue(message.is_announcement)
+
+    def test_non_organizer_cannot_forge_announcement_post(self):
+        self.client.force_login(self.player)
+
+        response = self.client.post(
+            reverse('event_message_post', kwargs={'pk': self.event.pk}),
+            {'body': 'Forged announcement', 'is_announcement': 'true'},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Message.objects.filter(event=self.event).exists())
 
     def test_ajax_post_returns_rendered_message_without_redirect(self):
         self.client.force_login(self.player)

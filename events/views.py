@@ -31,6 +31,16 @@ from .explore import (
     with_park_phase_counts,
 )
 
+# #122: actions on the event page return to the section they came from, with their message there.
+ATTENDANCE_ANCHOR = '#event-attendance-title'
+DISCUSSION_ANCHOR = '#event-discussion-title'
+ATTENDANCE_TAG = 'attendance'
+DISCUSSION_TAG = 'discussion'
+
+
+def attendance_url(event):
+    return event.get_absolute_url() + ATTENDANCE_ANCHOR
+
 
 def personal_scope_redirect(request, filters):
     if filters['scope'] != 'all' and not request.user.is_authenticated:
@@ -424,16 +434,20 @@ class EventCancelView(OrganizerOrAdminRequiredMixin, View):
         with transaction.atomic():
             event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
             if event.status == EventStatus.CANCELLED:
-                messages.error(request, 'This event has already been cancelled.')
+                messages.error(request, 'This event has already been cancelled.', extra_tags=ATTENDANCE_TAG)
             elif event.status == EventStatus.REMOVED:
-                messages.error(request, 'This event has been removed.')
+                messages.error(request, 'This event has been removed.', extra_tags=ATTENDANCE_TAG)
             elif event.has_started:
-                messages.error(request, 'This event has already started, so it can no longer be cancelled.')
+                messages.error(
+                    request,
+                    'This event has already started, so it can no longer be cancelled.',
+                    extra_tags=ATTENDANCE_TAG,
+                )
             else:
                 event.status = EventStatus.CANCELLED
                 event.save(update_fields=['status', 'updated_at'])
-                messages.success(request, 'Your event has been cancelled.')
-        return redirect(event.get_absolute_url())
+                messages.success(request, 'Your event has been cancelled.', extra_tags=ATTENDANCE_TAG)
+        return redirect(attendance_url(event))
 
 
 def edit_block_reason(event):
@@ -526,16 +540,24 @@ class EventRemoveParticipantView(OrganizerOrAdminRequiredMixin, View):
             event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
             rsvp = get_object_or_404(RSVP.objects.select_for_update(), pk=rsvp_pk, event=event)
             if event.status != EventStatus.SCHEDULED:
-                messages.error(request, 'Participants can only be removed from scheduled events.')
+                messages.error(
+                    request, 'Participants can only be removed from scheduled events.', extra_tags=ATTENDANCE_TAG
+                )
             elif event.has_started:
-                messages.error(request, 'This event has already started, so participants can no longer be removed.')
+                messages.error(
+                    request,
+                    'This event has already started, so participants can no longer be removed.',
+                    extra_tags=ATTENDANCE_TAG,
+                )
             elif rsvp.status != RSVPStatus.ACTIVE:
-                messages.error(request, 'This participant is no longer attending this event.')
+                messages.error(
+                    request, 'This participant is no longer attending this event.', extra_tags=ATTENDANCE_TAG
+                )
             else:
                 rsvp.status = RSVPStatus.REMOVED
                 rsvp.save(update_fields=['status', 'updated_at'])
-                messages.success(request, 'Participant removed from the event.')
-        return redirect(event.get_absolute_url())
+                messages.success(request, 'Participant removed from the event.', extra_tags=ATTENDANCE_TAG)
+        return redirect(attendance_url(event))
 
 
 class EventHostPlayingView(LoginRequiredMixin, View):
@@ -553,13 +575,15 @@ class EventHostPlayingView(LoginRequiredMixin, View):
         try:
             _, changed = set_host_playing(event.pk, playing)
         except HostPlayingError as error:
-            messages.error(request, str(error))
+            messages.error(request, str(error), extra_tags=ATTENDANCE_TAG)
         else:
             if changed:
                 messages.success(
-                    request, "You're playing in this game." if playing else "You're no longer playing in this game."
+                    request,
+                    "You're playing in this game." if playing else "You're no longer playing in this game.",
+                    extra_tags=ATTENDANCE_TAG,
                 )
-        return redirect(event.get_absolute_url())
+        return redirect(attendance_url(event))
 
 
 class EventDetailView(DetailView):
@@ -608,6 +632,7 @@ class EventDetailView(DetailView):
             can_manage=can_manage,
             can_cancel_event=can_manage and event_block_reason is None,
             can_edit_event=can_manage and event_block_reason is None,
+            can_announce=self.request.user.is_authenticated and self.request.user == event.organizer,
             active_rsvps=active_rsvps,
             announcement_messages=announcement_messages,
             regular_messages=regular_messages,
@@ -648,25 +673,34 @@ def post_event_message(request, pk):
 
     with transaction.atomic():
         event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+        is_announcement = request.POST.get('is_announcement') == 'true'
+        if is_announcement and request.user != event.organizer:
+            raise PermissionDenied
+
         if not event.discussion_open:
             error = 'Discussion is closed for this event.'
             if wants_json:
                 return JsonResponse({'error': error}, status=409)
-            messages.error(request, error)
+            messages.error(request, error, extra_tags=DISCUSSION_TAG)
         else:
             body = request.POST.get('body', '').strip()
             if not body:
                 error = 'Message cannot be blank.'
                 if wants_json:
                     return JsonResponse({'error': error}, status=400)
-                messages.error(request, error)
+                messages.error(request, error, extra_tags=DISCUSSION_TAG)
             elif len(body) > MESSAGE_MAX_LENGTH:
                 error = f'Message cannot exceed {MESSAGE_MAX_LENGTH} characters.'
                 if wants_json:
                     return JsonResponse({'error': error}, status=400)
-                messages.error(request, error)
+                messages.error(request, error, extra_tags=DISCUSSION_TAG)
             else:
-                message = Message.objects.create(event=event, author=request.user, body=body)
+                message = Message.objects.create(
+                    event=event,
+                    author=request.user,
+                    body=body,
+                    is_announcement=is_announcement,
+                )
                 if wants_json:
                     message = Message.objects.select_related('author__profile').get(pk=message.pk)
                     return JsonResponse(
@@ -675,6 +709,7 @@ def post_event_message(request, pk):
                                 'events/includes/event_message.html',
                                 {
                                     'message': message,
+                                    'is_announcement': is_announcement,
                                     'event': event,
                                     'can_manage_own_messages': can_manage_own_messages(event, request.user),
                                     'can_moderate_messages': event.can_be_managed_by(request.user),
@@ -684,9 +719,10 @@ def post_event_message(request, pk):
                                 request=request,
                             ),
                             'id': message.pk,
+                            'is_announcement': is_announcement,
                         }
                     )
-    return redirect(event_url)
+    return redirect(event_url + DISCUSSION_ANCHOR)
 
 
 def get_editable_message(request, event_pk, message_pk):
@@ -832,10 +868,9 @@ def event_rsvp(request, pk):
     if not request.user.is_authenticated:
         return redirect_to_login(event.get_absolute_url())
 
-    detail_url = event.get_absolute_url()
     if request.user == event.organizer:
-        messages.error(request, 'Organizers cannot RSVP to their own event.')
-        return redirect(detail_url)
+        messages.error(request, 'Organizers cannot RSVP to their own event.', extra_tags=ATTENDANCE_TAG)
+        return redirect(attendance_url(event))
 
     # US-4.3 (#31): lock the plain event row first (as EventCancelView does), so simultaneous joins,
     # the host's "I'm playing" switch and a cancel run one at a time. Only then re-read the RSVP,
@@ -845,16 +880,16 @@ def event_rsvp(request, pk):
         rsvp = RSVP.objects.filter(event=event, user=request.user).first()
         reason = join_block_reason(event, rsvp)
         if reason:
-            messages.error(request, reason)
+            messages.error(request, reason, extra_tags=ATTENDANCE_TAG)
         else:
             if rsvp:
                 rsvp.status = RSVPStatus.ACTIVE
                 rsvp.save(update_fields=['status', 'updated_at'])
             else:
                 RSVP.objects.create(event=event, user=request.user)
-            messages.success(request, 'You are attending this event.')
+            messages.success(request, 'You are attending this event.', extra_tags=ATTENDANCE_TAG)
 
-    return redirect(detail_url)
+    return redirect(attendance_url(event))
 
 
 @require_POST
@@ -863,24 +898,23 @@ def cancel_event_rsvp(request, pk):
     if not request.user.is_authenticated:
         return redirect_to_login(event.get_absolute_url())
 
-    detail_url = event.get_absolute_url()
     if request.user == event.organizer:
-        messages.error(request, 'Organizers cannot cancel an RSVP to their own event.')
-        return redirect(detail_url)
+        messages.error(request, 'Organizers cannot cancel an RSVP to their own event.', extra_tags=ATTENDANCE_TAG)
+        return redirect(attendance_url(event))
 
     # US-4.3 (#31): same lock order as Join, then re-check the event as it is now.
     with transaction.atomic():
         event = Event.objects.select_for_update().get(pk=pk)
         rsvp = RSVP.objects.filter(event=event, user=request.user).first()
         if event.status != EventStatus.SCHEDULED:
-            messages.error(request, 'RSVPs can only be cancelled for scheduled events.')
+            messages.error(request, 'RSVPs can only be cancelled for scheduled events.', extra_tags=ATTENDANCE_TAG)
         elif event.has_started:
-            messages.error(request, 'This event has already started.')
+            messages.error(request, 'This event has already started.', extra_tags=ATTENDANCE_TAG)
         elif rsvp is None or rsvp.status != RSVPStatus.ACTIVE:
-            messages.error(request, 'You are not attending this event.')
+            messages.error(request, 'You are not attending this event.', extra_tags=ATTENDANCE_TAG)
         else:
             rsvp.status = RSVPStatus.CANCELLED
             rsvp.save(update_fields=['status', 'updated_at'])
-            messages.success(request, 'Your RSVP has been cancelled.')
+            messages.success(request, 'Your RSVP has been cancelled.', extra_tags=ATTENDANCE_TAG)
 
-    return redirect(detail_url)
+    return redirect(attendance_url(event))

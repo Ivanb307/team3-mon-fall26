@@ -26,6 +26,7 @@
 .park-review-own .park-review { padding:0; border:0; }
 .park-review-pages, .park-review-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:16px; }
 .park-review-actions form { margin:0; }
+.park-review-own .park-review-form { margin:0; padding:0; border:0; background:none; }
 .park-review-signin { margin:16px 0; }
 
 @media(max-width:600px) {

@@ -15,6 +15,8 @@
   </section>
   <section class="park-panel-section" aria-label="Matching events">
     <h3>{{ panel_event_total }} matching event{{ panel_event_total|pluralize }}</h3>
+    <p>{{ phase_counts.live }} live · {{ phase_counts.upcoming }} upcoming · {{ phase_counts.ended }} ended</p>
+    <p class="park-panel-muted">Counts across all phases, with your other filters applied.</p>
     {% include "events/_park_events.html" %}
     {# US-4.9 (#118): the link adds Ended to the phase filter and keeps this panel open. #}
     {% if hidden_ended_total %}<p class="park-panel-hidden">{{ hidden_ended_total }} ended game{{ hidden_ended_total|pluralize }} hidden – <a href="{{ show_ended_url }}">show</a></p>{% endif %}

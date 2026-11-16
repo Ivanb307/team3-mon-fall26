@@ -175,6 +175,24 @@ test('clusters sum events rather than parks; empty pins/clusters are muted', asy
   assert.equal(ui.nodes['[data-list-fallback]'].hidden, true);
 });
 
+test('selected live games color pins and clusters without changing their event totals', async () => {
+  const data = {parks: parks.map((park, index) => ({...park, live_count: index === 0 ? 2 : 0}))};
+  const ui = await controller({data});
+  assert.match(ui.markers[0].options.icon.html.className, /is-live/);
+  assert.match(ui.markers[0].options.alt, /2 live/);
+  assert.equal(ui.markers[0].options.icon.html.textContent, '3');
+  assert.match(ui.markers[1].options.icon.html.className, /is-active/);
+  assert.doesNotMatch(ui.markers[1].options.icon.html.className, /is-live/);
+  assert.doesNotMatch(ui.markers[2].options.icon.html.className, /is-active|is-live/);
+  const cluster = markers => ui.clusterOptions.iconCreateFunction({getAllChildMarkers: () => markers});
+  assert.equal(cluster(ui.markers).html.textContent, '7');
+  assert.match(cluster(ui.markers).html.className, /is-live/);
+  assert.doesNotMatch(cluster(ui.markers.slice(1)).html.className, /is-live/);
+  const upcomingOnly = await controller({data: {parks: [{...parks[0], event_count: 1, live_count: 0}]}});
+  assert.equal(upcomingOnly.markers[0].options.icon.html.textContent, '1');
+  assert.doesNotMatch(upcomingOnly.markers[0].options.icon.html.className, /is-live/);
+});
+
 test('pin selection, Back, Forward and close preserve filters, page and the map', async () => {
   const ui = await controller({data: {parks, unmapped_event_count: 0}});
   await ui.markers[0].listeners.click();

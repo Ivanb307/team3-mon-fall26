@@ -272,9 +272,10 @@
 
   // Without Leaflet there is no map to retry in place, so Try again reloads the page.
   function failHard() { fail(); root.querySelector('[data-map-retry]').addEventListener('click', () => window.location.reload()); }
-  function icon(count, cluster = false) {
+  function icon(count, cluster = false, liveCount = 0) {
     const span = document.createElement('span');
-    span.className = (cluster ? 'explore-cluster' : 'explore-pin') + (count > 0 ? ' is-active' : '');
+    span.className = (cluster ? 'explore-cluster' : 'explore-pin') +
+      (count > 0 ? (liveCount > 0 ? ' is-active is-live' : ' is-active') : '');
     span.textContent = count > 0 ? String(count) : (cluster ? '○' : '');
     return L.divIcon({html: span, className: 'explore-marker', iconSize: cluster ? [46,46] : [30,30]});
   }
@@ -288,8 +289,11 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).on('tileerror', fail).addTo(map);
       group = L.markerClusterGroup({showCoverageOnHover: false, maxClusterRadius: 48,
-        iconCreateFunction: (cluster) => icon(cluster.getAllChildMarkers().reduce(
-          (sum, marker) => sum + marker.options.eventCount, 0), true)
+        iconCreateFunction: (cluster) => {
+          const markers = cluster.getAllChildMarkers();
+          return icon(markers.reduce((sum, marker) => sum + marker.options.eventCount, 0), true,
+            markers.reduce((sum, marker) => sum + marker.options.liveCount, 0));
+        }
       }).addTo(map);
     } catch (_) { failHard(); return; }
     root.querySelector('[data-map-retry]').addEventListener('click', () => {
@@ -314,8 +318,10 @@
       const data = await response.json();
       group.clearLayers();
       const markers = data.parks.map((park) => {
-        const title = `${park.name} · ${park.event_count} matching events`;
-        const marker = L.marker([park.lat,park.lng], {icon: icon(park.event_count), eventCount: park.event_count,
+        const title = `${park.name} · ${park.event_count} matching events` +
+          (park.live_count > 0 ? ` · ${park.live_count} live` : '');
+        const marker = L.marker([park.lat,park.lng], {icon: icon(park.event_count, false, park.live_count || 0),
+          eventCount: park.event_count, liveCount: park.live_count || 0,
           title, alt: title, keyboard: true});
         marker.on('add', () => marker.getElement()?.setAttribute('aria-label', title));
         const tooltip = document.createElement('span');

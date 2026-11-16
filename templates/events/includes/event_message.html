@@ -4,14 +4,18 @@
     {% if is_announcement %}<span class="event-discussion-announcement-label">Organizer announcement</span>{% endif %}
     <time datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"M j, Y, g:i a" }}</time>
     {% if message.edited_at %}<span class="event-discussion-message-edited">Edited</span>{% endif %}
-    {% if can_manage_own_messages and user.pk == message.author_id %}
+    {% if can_moderate_messages or can_delete_own_messages and user.pk == message.author_id %}
       <div class="event-discussion-message-actions" data-message-actions>
-        <button class="btn btn--ghost" type="button" data-message-edit-toggle aria-expanded="false" aria-controls="event-message-edit-{{ message.pk }}">Edit</button>
-        <form method="post" action="{% url 'event_message_delete' event.pk message.pk %}" data-message-delete-form onsubmit="return confirm('Delete this message? This cannot be undone.');">
-          {% csrf_token %}
-          <button class="btn btn--ghost" type="submit">Delete</button>
-          <span class="event-discussion-delete-status" role="status" aria-live="polite" data-message-delete-status></span>
-        </form>
+        {% if can_manage_own_messages and user.pk == message.author_id %}
+          <button class="btn btn--ghost" type="button" data-message-edit-toggle aria-expanded="false" aria-controls="event-message-edit-{{ message.pk }}">Edit</button>
+        {% endif %}
+        {% if can_moderate_messages or user.pk == message.author_id %}
+          <form method="post" action="{% url 'event_message_delete' event.pk message.pk %}" data-message-delete-form onsubmit="return confirm('Delete this message? This cannot be undone.');">
+            {% csrf_token %}
+            <button class="btn btn--ghost" type="submit">Delete</button>
+            <span class="event-discussion-delete-status" role="status" aria-live="polite" data-message-delete-status></span>
+          </form>
+        {% endif %}
       </div>
     {% endif %}
   </header>

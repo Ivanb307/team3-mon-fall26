@@ -180,7 +180,8 @@ class EventDiscussionTests(TestCase):
 
     def test_non_author_cannot_edit_or_delete_message(self):
         message = self.make_message('Keep this message')
-        self.client.force_login(self.host)
+        stranger = User.objects.create_user('discussion-stranger', 'discussion-stranger@example.test')
+        self.client.force_login(stranger)
         edit_url = reverse('event_message_edit', kwargs={'pk': self.event.pk, 'message_pk': message.pk})
         delete_url = reverse('event_message_delete', kwargs={'pk': self.event.pk, 'message_pk': message.pk})
         page = self.client.get(self.event.get_absolute_url())
@@ -196,6 +197,43 @@ class EventDiscussionTests(TestCase):
         self.assertEqual(message.body, 'Keep this message')
         self.assertIsNone(message.edited_at)
         self.assertTrue(Message.objects.filter(pk=message.pk).exists())
+
+    def test_organizer_can_delete_any_message_in_their_event(self):
+        message = self.make_message('Message to moderate')
+        self.client.force_login(self.host)
+        delete_url = reverse('event_message_delete', kwargs={'pk': self.event.pk, 'message_pk': message.pk})
+        page = self.client.get(self.event.get_absolute_url())
+
+        self.assertContains(page, delete_url)
+        edit_url = reverse('event_message_edit', kwargs={'pk': self.event.pk, 'message_pk': message.pk})
+        self.assertNotContains(page, edit_url)
+        response = self.client.post(delete_url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'deleted': True, 'id': message.pk})
+        self.assertFalse(Message.objects.filter(pk=message.pk).exists())
+
+    def test_admin_can_delete_any_message_on_any_event_after_it_ends(self):
+        admin = User.objects.create_user('discussion-moderator', 'discussion-moderator@example.test', is_staff=True)
+        message = self.make_message('Message on another event', event=self.other_event, author=self.host)
+        Event.objects.filter(pk=self.other_event.pk).update(date=timezone.localdate() - datetime.timedelta(days=1))
+        self.client.force_login(admin)
+        delete_url = reverse(
+            'event_message_delete',
+            kwargs={'pk': self.other_event.pk, 'message_pk': message.pk},
+        )
+        page = self.client.get(self.other_event.get_absolute_url())
+
+        self.assertContains(page, delete_url)
+        edit_url = reverse(
+            'event_message_edit',
+            kwargs={'pk': self.other_event.pk, 'message_pk': message.pk},
+        )
+        self.assertNotContains(page, edit_url)
+        response = self.client.post(delete_url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Message.objects.filter(pk=message.pk).exists())
 
     def test_ended_event_hides_and_refuses_participant_message_changes(self):
         message = self.make_message('Ended event message')

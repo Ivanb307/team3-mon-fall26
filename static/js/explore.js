@@ -4,27 +4,40 @@
   const root = document.querySelector('[data-explore]');
   if (!root) return;
   const filtersForm = root.querySelector('.explore-filters');
-  filtersForm.querySelector('[name="events_only"]').addEventListener('change', () => filtersForm.requestSubmit());
-  // US-2.3: borough and zip-code picks apply immediately; the reload re-fits the map to the results.
-  const autosubmitFields = Array.from(filtersForm.querySelectorAll('[data-autosubmit]'));
-  const phaseBoxes = autosubmitFields.filter((field) => field.name === 'phase');
-  autosubmitFields.forEach((field) => field.addEventListener('change', () => {
-    // US-4.9 (#118): at least one phase stays checked, because none would match nothing. Unchecking the
-    // last one checks it again instead of submitting. (Without JavaScript, the server shows the default.)
-    if (field.name === 'phase' && !phaseBoxes.some((box) => box.checked)) {
-      field.checked = true;
-      return;
-    }
-    filtersForm.requestSubmit();
-  }));
-  // US-2.7: clearing the search box with its built-in × resets results. Enter already submits the
-  // form natively (and also fires 'search'), so skip that case to avoid a double submit.
-  const search = filtersForm.querySelector('input[name="q"]');
-  let searchByEnter = false;
-  search?.addEventListener('keydown', (event) => { searchByEnter = event.key === 'Enter'; });
-  search?.addEventListener('search', () => {
-    if (searchByEnter) { searchByEnter = false; return; }
-    if (!search.value.trim()) filtersForm.requestSubmit();
+  // The filter fields are replaced after each results update (#123), so their listeners are attached here.
+  function bindFilterFields() {
+    filtersForm.querySelector('[name="events_only"]').addEventListener('change', () => filtersForm.requestSubmit());
+    // US-2.3: borough and zip-code picks apply immediately.
+    const autosubmitFields = Array.from(filtersForm.querySelectorAll('[data-autosubmit]'));
+    const phaseBoxes = autosubmitFields.filter((field) => field.name === 'phase');
+    autosubmitFields.forEach((field) => field.addEventListener('change', () => {
+      // US-4.9 (#118): at least one phase stays checked, because none would match nothing. Unchecking the
+      // last one checks it again instead of submitting. (Without JavaScript, the server shows the default.)
+      if (field.name === 'phase' && !phaseBoxes.some((box) => box.checked)) {
+        field.checked = true;
+        return;
+      }
+      filtersForm.requestSubmit();
+    }));
+    // US-2.7: clearing the search box with its built-in × resets results. Enter already submits the
+    // form natively (and also fires 'search'), so skip that case to avoid a double submit.
+    const search = filtersForm.querySelector('input[name="q"]');
+    let searchByEnter = false;
+    search?.addEventListener('keydown', (event) => { searchByEnter = event.key === 'Enter'; });
+    search?.addEventListener('search', () => {
+      if (searchByEnter) { searchByEnter = false; return; }
+      if (!search.value.trim()) filtersForm.requestSubmit();
+    });
+  }
+  bindFilterFields();
+  // #123: filter changes update the results in place. Without JavaScript (or without park data, where
+  // there's no list to update) the form submits normally.
+  filtersForm.addEventListener('submit', (event) => {
+    if (!fallback) return;
+    event.preventDefault();
+    const url = new URL(filtersForm.action || window.location.href, window.location.href);
+    url.search = new URLSearchParams(new FormData(filtersForm)).toString();
+    return navigateExplore(url);
   });
   const dialog = root.querySelector('[data-park-dialog]');
   const preview = root.querySelector('[data-park-preview-content]');
@@ -58,6 +71,19 @@
     dialog.showModal();
   }
 
+  // #123: two addresses show the same results when they differ only in the view, the open panel, empty
+  // values or defaults, so switching Map/List or opening a panel never refetches the results.
+  const DEFAULTS = {page: '1', scope: 'all', tab: 'events'};
+  function stateKey(url, ignore) {
+    return Array.from(url.searchParams)
+      .filter(([name, value]) => value !== '' && !ignore.includes(name) && DEFAULTS[name] !== value)
+      .map(([name, value]) => `${name}=${value}`).sort().join('&');
+  }
+  const resultsKey = (url) => stateKey(url, ['view', 'panel']);
+  // Map pins don't depend on the list tab or page.
+  const pinsKey = (url) => stateKey(url, ['view', 'panel', 'tab', 'page']);
+  let renderedKey = resultsKey(new URL(window.location.href));
+
   function saveExplore(url, current) {
     const save = saveQueue.then(async () => {
       if (current !== transition) return;
@@ -74,10 +100,24 @@
   async function navigateExplore(url, {previewURL, trigger, fromHistory = false} = {}) {
     const current = ++transition;
     pendingPreview?.abort();
-    const nextPanel = panelIn(url);
+    const before = new URL(window.location.href);
+    // #123: new filters, tab or page fetch the changed results (and the open panel, which follows the filters).
+    const changesResults = Boolean(fallback) && resultsKey(url) !== renderedKey;
+    let nextPanel = panelIn(url);
     let html;
+    let results;
     try {
-      if (nextPanel && nextPanel !== panelId) {
+      if (changesResults) {
+        const endpoint = new URL(root.dataset.resultsUrl, url);
+        endpoint.search = url.search;
+        pendingPreview = new AbortController();
+        const response = await fetch(endpoint, {signal: pendingPreview.signal, credentials: 'same-origin'});
+        if (!response.ok || response.redirected) throw new Error('Explore results unavailable');
+        results = await response.json();
+        if (results.reload) throw new Error('Explore needs a full page');
+        nextPanel = results.panel_id;
+        html = results.panel_html;
+      } else if (nextPanel && nextPanel !== panelId) {
         const endpoint = new URL(previewURL || `parks/${nextPanel}/preview/`, url);
         endpoint.search = url.search;
         endpoint.searchParams.delete('panel');
@@ -87,11 +127,15 @@
         html = await response.text();
       }
       if (current !== transition) return;
-      await saveExplore(url, current);
+      // The results request already saved the state for Back to results on the server.
+      if (!changesResults) await saveExplore(url, current);
       if (current !== transition) return;
+      if (results) url = new URL(results.url, url);
       if (!fromHistory) history.pushState(null, '', url);
+      if (results) applyResults(results, url, before);
       renderView(url);
-      if (nextPanel === panelId) return;
+      // A panel that stays open still gets its new contents, since its events follow the filters.
+      if (nextPanel === panelId && !(results && nextPanel)) return;
       panelId = nextPanel;
       if (nextPanel) {
         preview.innerHTML = html;
@@ -111,6 +155,34 @@
     }
   }
 
+  // #123: put the server's new pieces in place, set the filter fields up again and refresh the pins.
+  function applyResults(results, url, before) {
+    const active = document.activeElement;
+    const focusedId = active && filtersForm.contains?.(active) ? active.id : '';
+    filtersForm.innerHTML = results.filters_html;
+    window.LookaheadSelect?.enhanceAll(filtersForm);
+    bindFilterFields();
+    if (focusedId) filtersForm.querySelector(`#${focusedId}`)?.focus({preventScroll: true});
+    if (counts) counts.innerHTML = results.counts_html;
+    fallback.innerHTML = results.list_html;
+    if (overlay) overlay.innerHTML = results.map_empty_html;
+    renderedKey = resultsKey(url);
+    root.dataset.focusPark = '';
+    root.querySelectorAll('[data-explore-view]').forEach((link) => {
+      const target = new URL(url);
+      target.searchParams.set('view', link.dataset.exploreView);
+      target.searchParams.delete('panel');
+      link.href = target.href;
+    });
+    if (container && pinsKey(new URL(results.map_url, url)) !== pinsKey(new URL(container.dataset.mapUrl, url))) {
+      container.dataset.mapUrl = results.map_url;
+      if (mapStarted && !mapFailed) load(true);
+    }
+    // A new page or tab brings the top of the list back into view if it had scrolled away.
+    const listMoved = ['page', 'tab'].some((name) => url.searchParams.get(name) !== before.searchParams.get(name));
+    if (listMoved && fallback.getBoundingClientRect?.().top < 0) fallback.scrollIntoView({block: 'start'});
+  }
+
   function closePreview() {
     return navigateExplore(parkURL(null));
   }
@@ -128,16 +200,26 @@
       event.preventDefault();
       if (link.matches('.park-panel-close-link')) closePreview();
       else navigateExplore(new URL(link.href, window.location.href), {previewURL: link.dataset.parkPreviewUrl, trigger: link});
+      return;
+    }
+    // #123: tabs, pages, pills, Clear filters, "See all" and every other link back to Explore update in place.
+    if (link && fallback && !link.target) {
+      const target = new URL(link.href, window.location.href);
+      const explorePath = new URL(filtersForm.action || window.location.href, window.location.href).pathname;
+      if (target.origin === new URL(window.location.href).origin && target.pathname === explorePath) {
+        event.preventDefault();
+        return navigateExplore(target);
+      }
     }
   });
   window.addEventListener('popstate', () => navigateExplore(new URL(window.location.href), {fromHistory: true}));
   const shell = root.querySelector('[data-map-shell]');
   const container = root.querySelector('#explore-map');
   const fallback = root.querySelector('[data-list-fallback]');
+  const counts = root.querySelector('[data-explore-counts]');
+  const overlay = root.querySelector('[data-map-overlay]');
   const errorBox = root.querySelector('[data-map-error]');
   const status = root.querySelector('[data-map-status]');
-  const viewLinks = root.querySelectorAll('[data-explore-view]');
-  const viewInput = filtersForm.querySelector('input[name="view"]');
   let map;
   let group;
   let mapFailed = false;
@@ -157,8 +239,9 @@
     const view = url.searchParams.getAll('view').at(-1) === 'list' ? 'list' : 'map';
     const changed = view !== root.dataset.view;
     root.dataset.view = view;
-    viewInput.value = view;
-    viewLinks.forEach((link) => {
+    // Looked up each time, since results updates replace the filter fields and their links (#123).
+    filtersForm.querySelector('input[name="view"]').value = view;
+    root.querySelectorAll('[data-explore-view]').forEach((link) => {
       if (link.dataset.exploreView === view) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     });
@@ -223,7 +306,8 @@
     load();
   }
   let mapRequest;
-  async function load() {
+  // keepView (#123): after new filters, keep the map where it is if any new pin is still in view.
+  async function load(keepView = false) {
     mapRequest?.abort();
     mapRequest = new AbortController();
     status.hidden = false;
@@ -254,7 +338,9 @@
         if (selectedPark) map.setView([selectedPark.lat, selectedPark.lng], 15);
         else if (markers.length) map.fitBounds(group.getBounds(), {padding:[36,36], maxZoom:15});
       };
-      if (root.dataset.view === 'map' && !mapFailed) fit();
+      const stillInView = keepView && markers.some((marker) => map.getBounds().contains(marker.getLatLng()));
+      if (stillInView) fitPending = undefined;
+      else if (root.dataset.view === 'map' && !mapFailed) fit();
       else fitPending = fit;
       // US-2.5: zero pins shows the server-rendered empty state (pins already cleared above).
       // Parks may still match but lack coordinates; the unmapped notice below links to List view.

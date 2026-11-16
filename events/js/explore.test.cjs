@@ -13,12 +13,32 @@ function element() {
     replaceChildren() { this.children = []; }};
 }
 
+// #123: what /events/results/ returns for a URL: its pieces, labelled with the URL so tests can tell them apart.
+function resultsFor(url) {
+  const params = new URL(url).searchParams;
+  const panel = params.get('panel') || '';
+  params.delete('panel');
+  const canonical = new URLSearchParams(params);
+  if (panel) canonical.set('panel', panel);
+  const pins = new URLSearchParams(params);
+  for (const name of ['view', 'tab', 'page']) pins.delete(name);
+  return {url: `/events/?${canonical}`, filters_html: `fields ${params}`, counts_html: `counts ${params}`,
+    list_html: `list ${params}`, map_empty_html: '', map_url: `/events/api/map/?${pins}`,
+    panel_id: panel, panel_html: panel ? `<section>Panel ${params}</section>` : ''};
+}
+
+// Stands in for the browser's FormData: the form's current fields, as name/value pairs.
+class FormData {
+  constructor(form) { this.entries = form.formEntries || []; }
+  [Symbol.iterator]() { return this.entries[Symbol.iterator](); }
+}
+
 async function controller({data, reject = false, leaflet = true, selected = false, mapEmpty = false,
-  noParkData = false, initialView = 'map'} = {}) {
+  noParkData = false, initialView = 'map', inView = false, resultsFail = false} = {}) {
   const nodes = {};
-  const state = {reject, clears: 0, fetches: 0, maps: 0, saves: [], previews: []};
+  const state = {reject, clears: 0, fetches: 0, maps: 0, saves: [], previews: [], results: []};
   for (const key of ['.explore-filters', '[data-park-dialog]', '[data-close-preview]',
-    '[data-park-preview-content]', '[name="csrfmiddlewaretoken"]',
+    '[data-park-preview-content]', '[name="csrfmiddlewaretoken"]', '[data-explore-counts]', '[data-map-overlay]',
     '[data-map-shell]', '#explore-map', '[data-list-fallback]', '[data-map-error]',
     '[data-map-status]', '[data-unmapped]', '[data-map-retry]']) nodes[key] = element();
   if (mapEmpty) nodes['[data-map-empty]'] = element();  // server-rendered US-2.5 empty state
@@ -42,7 +62,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   if (noParkData) {
     // US-2.5 no_park_data: the template replaces the map shell, error box and list with one message.
     for (const key of ['[data-map-shell]', '#explore-map', '[data-list-fallback]', '[data-map-error]',
-      '[data-map-status]', '[data-unmapped]', '[data-map-retry]']) delete nodes[key];
+      '[data-map-status]', '[data-unmapped]', '[data-map-retry]', '[data-map-overlay]']) delete nodes[key];
   }
   // Like the real DOM, a missing element is null.
   const quickView = {href: '?view=map&zip=11211&zip=11222&page=2&panel=7', dataset: {parkPreviewUrl: '/events/parks/7/preview/'},
@@ -52,7 +72,8 @@ async function controller({data, reject = false, leaflet = true, selected = fals
     matches: selector => selector === '[data-explore-view]',
     setAttribute(name, value) {this[name] = value;}, removeAttribute(name) {delete this[name];},
   }));
-  const root = {...element(), dataset: {view: initialView, focusPark: selected ? '7' : '', stateUrl: '/events/explore/state/'},
+  const root = {...element(), dataset: {view: initialView, focusPark: selected ? '7' : '', stateUrl: '/events/explore/state/',
+    resultsUrl: '/events/results/'},
     querySelector: key => nodes[key] ?? null,
     querySelectorAll: key => key === '[data-explore-view]' ? viewLinks : [quickView]};
   const navigations = [];
@@ -61,7 +82,8 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   let fits = 0;
   let tileError;
   const map = {setView(position, zoom) {state.mapView = {position, zoom}; return this;},
-    fitBounds() {fits++;}, eachLayer() {}, invalidateSize(options) {state.invalidated = options;}};
+    fitBounds() {fits++;}, eachLayer() {}, invalidateSize(options) {state.invalidated = options;},
+    getBounds: () => ({contains: () => inView})};
   const group = {addTo() {return this;}, clearLayers() {state.clears++;}, addLayers() {}, getBounds() {return {};}};
   const L = {
     map: () => { state.maps++; return map; },
@@ -69,7 +91,7 @@ async function controller({data, reject = false, leaflet = true, selected = fals
     markerClusterGroup(options) {clusterOptions = options; return group;},
     divIcon: options => options,
     marker(position, options) {
-      const marker = {position, options, listeners: {},
+      const marker = {position, options, listeners: {}, getLatLng: () => position,
         on(name, handler) {this.listeners[name] = handler; return this;},
         bindTooltip() {}, getElement() {return {setAttribute() {}};}};
       markers.push(marker);
@@ -90,12 +112,17 @@ async function controller({data, reject = false, leaflet = true, selected = fals
     window.location.href = entries[index];
     return window.listeners.popstate();
   }
-  vm.runInNewContext(source, {window, L, URL, AbortController,
+  vm.runInNewContext(source, {window, L, URL, URLSearchParams, FormData, AbortController,
     document: {querySelector: () => root, createElement: element, createTextNode: text => ({textContent: text})},
     fetch: async (url, options) => {
       if (options.method === 'POST') {
         state.saves.push(new URLSearchParams(options.body));
         return {ok: true};
+      }
+      if (String(url).includes('/events/results/')) {
+        state.results.push(new URL(url));
+        if (resultsFail) return {ok: false, redirected: false};
+        return {ok: true, redirected: false, json: async () => resultsFor(url)};
       }
       if (String(url).includes('/preview/')) {
         state.previews.push(new URL(url));
@@ -109,9 +136,24 @@ async function controller({data, reject = false, leaflet = true, selected = fals
   const clickView = view => root.listeners.click({button: 0, target: {
     closest: () => viewLinks.find(link => link.dataset.exploreView === view),
   }, preventDefault() {}});
+  // #123: click any link inside Explore, like a tab, page, pill or "See all"; returns whether it was intercepted.
+  const clickLink = async (href) => {
+    let prevented = false;
+    await root.listeners.click({button: 0, preventDefault() { prevented = true; },
+      target: {closest: () => ({href, target: '', matches: () => false})}});
+    await new Promise(resolve => setImmediate(resolve));
+    return prevented;
+  };
+  const submitFilters = async (entries) => {
+    let prevented = false;
+    nodes['.explore-filters'].formEntries = entries;
+    await nodes['.explore-filters'].listeners.submit({preventDefault() { prevented = true; }});
+    await new Promise(resolve => setImmediate(resolve));
+    return prevented;
+  };
   return {nodes, markers, clusterOptions, fits, navigations, checkbox, dialog, autosubmitFields, phaseBoxes,
     submits: () => submits, tileError, state, fitCount: () => fits, quickView, root, window, historyStep,
-    viewInput, viewLinks, clickView};
+    viewInput, viewLinks, clickView, clickLink, submitFilters};
 }
 
 const parks = [
@@ -343,4 +385,97 @@ test('no park data: map markup is absent, so initialization exits without throwi
     ui.checkbox.listeners.change();
     assert.equal(ui.submits(), 1);
   }
+});
+
+// #123: tabs, pages, filters and "See all" update the results without a page reload.
+test('a new page or tab swaps the list in place and leaves the map alone', async () => {
+  const ui = await controller({data: {parks, unmapped_event_count: 0}});
+  assert.equal(await ui.clickLink('?view=map&zip=11211&zip=11222&page=3'), true);
+  assert.equal(ui.state.results.length, 1);
+  assert.equal(ui.state.results[0].pathname, '/events/results/');
+  assert.equal(ui.nodes['[data-list-fallback]'].innerHTML, 'list view=map&zip=11211&zip=11222&page=3');
+  assert.equal(ui.nodes['[data-explore-counts]'].innerHTML, 'counts view=map&zip=11211&zip=11222&page=3');
+  assert.equal(new URL(ui.window.location.href).searchParams.get('page'), '3');
+  assert.equal(ui.state.saves.length, 0, 'the results request saves the state for Back to results');
+
+  assert.equal(await ui.clickLink('?view=list&zip=11211&zip=11222&tab=parks'), true);
+  assert.equal(ui.root.dataset.view, 'list');
+  assert.equal(ui.nodes['[data-list-fallback]'].hidden, false);
+  assert.equal(ui.viewLinks[0].href, 'http://localhost/events/?view=map&zip=11211&zip=11222&tab=parks');
+  assert.equal(ui.state.fetches, 1, 'pins only depend on the filters, so they are not reloaded');
+  assert.equal(ui.fitCount(), 1);
+  assert.deepEqual(ui.navigations, []);
+});
+
+test('Map/List and panels never refetch the results', async () => {
+  const ui = await controller({data: {parks, unmapped_event_count: 0}});
+  await ui.clickView('list');
+  await ui.markers[0].listeners.click();
+  await ui.nodes['[data-close-preview]'].listeners.click();
+  assert.equal(ui.state.results.length, 0);
+});
+
+test('filter changes update the fields, results and pins, and keep the map if pins are still in view', async () => {
+  const ui = await controller({data: {parks, unmapped_event_count: 0}, inView: true});
+  const prevented = await ui.submitFilters([['view', 'map'], ['tab', 'events'], ['q', ''], ['borough', 'B']]);
+  assert.equal(prevented, true);
+  assert.equal(ui.state.results[0].searchParams.get('borough'), 'B');
+  assert.equal(ui.nodes['.explore-filters'].innerHTML, 'fields view=map&tab=events&q=&borough=B');
+  assert.equal(new URL(ui.window.location.href).searchParams.get('borough'), 'B');
+  assert.equal(ui.nodes['#explore-map'].dataset.mapUrl, '/events/api/map/?q=&borough=B');
+  assert.equal(ui.state.fetches, 2, 'the pins reload for the new filters');
+  assert.equal(ui.fitCount(), 1, 'the map stays where it is while new pins are in view');
+  ui.autosubmitFields[0].listeners.change();
+  assert.equal(ui.submits(), 1, 'the new filter fields submit as they change');
+});
+
+test('filter changes re-fit the map when none of the new pins are in view', async () => {
+  const ui = await controller({data: {parks, unmapped_event_count: 0}, inView: false});
+  await ui.submitFilters([['view', 'map'], ['borough', 'Q']]);
+  assert.equal(ui.state.fetches, 2);
+  assert.equal(ui.fitCount(), 2);
+});
+
+test('Back and Forward bring back the earlier results', async () => {
+  const ui = await controller({data: {parks, unmapped_event_count: 0}});
+  await ui.clickLink('?view=map&zip=11211&zip=11222&page=3');
+  await ui.historyStep(-1);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ui.nodes['[data-list-fallback]'].innerHTML, 'list view=map&zip=11211&zip=11222&page=2');
+  await ui.historyStep(1);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ui.nodes['[data-list-fallback]'].innerHTML, 'list view=map&zip=11211&zip=11222&page=3');
+  assert.equal(ui.state.results.length, 3);
+  assert.deepEqual(ui.navigations, []);
+});
+
+test('an open panel follows new filters, and "See all" closes it', async () => {
+  const ui = await controller({data: {parks, unmapped_event_count: 0}, selected: true});
+  await ui.clickLink('?view=map&zip=11211&zip=11222&page=2&panel=7&phase=upcoming&phase=live&phase=ended');
+  assert.equal(ui.dialog.open, true);
+  assert.match(ui.nodes['[data-park-preview-content]'].innerHTML, /^<section>Panel .*phase=ended/);
+  assert.equal(new URL(ui.window.location.href).searchParams.get('panel'), '7');
+  assert.equal(ui.root.dataset.focusPark, '', 'only the first load centers on a legacy link');
+
+  await ui.clickLink('/events/?view=list&tab=events&park=7&zip=11211&zip=11222');
+  assert.equal(ui.dialog.open, false);
+  assert.equal(ui.root.dataset.view, 'list');
+  assert.equal(new URL(ui.window.location.href).searchParams.has('panel'), false);
+});
+
+test('links to other pages, and failed results requests, use normal navigation', async () => {
+  const ui = await controller({resultsFail: true});
+  assert.equal(await ui.clickLink('/events/5/'), false);
+  assert.equal(await ui.clickLink('/parks/7/'), false);
+  assert.equal(ui.state.results.length, 0);
+  await ui.clickLink('?view=map&zip=11211&zip=11222&page=3');
+  assert.equal(ui.navigations.length, 1);
+  assert.equal(ui.navigations[0].searchParams.get('page'), '3');
+});
+
+test('without park data the filter form submits normally', async () => {
+  const ui = await controller({noParkData: true});
+  assert.equal(await ui.submitFilters([['borough', 'B']]), false);
+  assert.equal(await ui.clickLink('?view=list&tab=parks'), false);
+  assert.equal(ui.state.results.length, 0);
 });

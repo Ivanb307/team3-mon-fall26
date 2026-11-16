@@ -52,6 +52,8 @@ document.querySelectorAll('[data-event-discussion-list]').forEach((list) => {
 
         addMessage(result.html, result.id, result.is_announcement);
         textarea.value = '';
+        const announcementCheckbox = form.querySelector('input[name="is_announcement"]');
+        if (announcementCheckbox) announcementCheckbox.checked = false;
       } catch {
         status.textContent = 'Could not post your message. Please try again.';
       } finally {

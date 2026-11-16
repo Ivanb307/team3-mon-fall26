@@ -39,6 +39,7 @@ function setup({open = true, hidden = false, initialIds = []} = {}) {
   const status = {textContent: ''};
   const button = {disabled: false};
   const textarea = {value: 'New message'};
+  const announcementCheckbox = {checked: false};
   const form = {
     action: '/post/',
     listeners: {},
@@ -48,6 +49,7 @@ function setup({open = true, hidden = false, initialIds = []} = {}) {
     querySelector(selector) {
       if (selector === 'button[type="submit"]') return button;
       if (selector === 'textarea[name="body"]') return textarea;
+      if (selector === 'input[name="is_announcement"]') return announcementCheckbox;
       if (selector === '[data-event-discussion-status]') return status;
       return null;
     },
@@ -106,7 +108,7 @@ function setup({open = true, hidden = false, initialIds = []} = {}) {
 
   vm.runInNewContext(source, context);
 
-  return {state, list, form, button, textarea, status, document};
+  return {state, list, form, button, textarea, status, announcementCheckbox, document};
 }
 
 test('polls every 30 seconds only for an open discussion', () => {
@@ -165,6 +167,23 @@ test('keeps the poll cursor unchanged after local posting and skips duplicate ID
   assert.match(state.fetchCalls[1].url, /after=1$/);
   assert.deepEqual(list.children.map((item) => item.dataset.messageId), ['1', '3', '2']);
   assert.equal(list.dataset.latestMessageId, '3');
+});
+
+test('unchecks the announcement option after a successful announcement post', async () => {
+  const {state, form, announcementCheckbox} = setup();
+  announcementCheckbox.checked = true;
+  state.fetchResponse = async () => ({
+    ok: true,
+    json: async () => ({
+      html: '<li class="event-discussion-message--announcement">Announcement</li>',
+      id: 1,
+      is_announcement: true,
+    }),
+  });
+
+  await form.listeners.submit({preventDefault() {}});
+
+  assert.equal(announcementCheckbox.checked, false);
 });
 
 test('inserts an AJAX-posted announcement before announcements and regular messages', async () => {

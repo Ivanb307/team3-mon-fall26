@@ -140,6 +140,20 @@ class RemovedEventDisappearsTests(RemoveEventTestCase):
         self.client.logout()
         self.assertEqual(self.titles(phase=list(EventPhase)), [])
 
+    def test_park_panel_hides_a_removed_ended_game_unless_ended_is_selected(self):
+        over = self.event('Ended game', start='08:00', end='09:00')
+        self.client.force_login(self.admin)
+        self.client.post(reverse('event_remove', args=[over.pk]))
+        self.client.force_login(self.host)
+        preview = reverse('explore_park_preview', args=[self.park.pk])
+
+        default = self.client.get(preview, {'scope': 'hosting'})
+        with_ended = self.client.get(preview, {'scope': 'hosting', 'phase': list(EventPhase)})
+
+        self.assertNotContains(default, 'Ended game')
+        self.assertEqual(default.context['hidden_ended_total'], 1)
+        self.assertContains(with_ended, 'Ended game')
+
 
 class RemovedEventPageTests(RemoveEventTestCase):
     def setUp(self):

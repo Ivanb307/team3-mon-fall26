@@ -366,7 +366,8 @@ def park_preview_context(park, filters, user, page=1):
         .select_related('organizer__profile')
     )
     cards = event_cards(with_viewer_attending(events, user), user, filters)
-    park_events = [event for event in cards if not (count_hidden and event.phase == EventPhase.ENDED)]
+    # By time, not `phase`: removed games (#48) are in no phase but still hide once they're over.
+    park_events = [event for event in cards if not (count_hidden and event.has_ended)]
     hidden_ended_total = len(cards) - len(park_events)
     show_ended_params = filter_params(filters)
     show_ended_params.setlist('phase', [str(phase) for phase in (*phases, EventPhase.ENDED)])

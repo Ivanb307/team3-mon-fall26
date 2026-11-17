@@ -80,7 +80,8 @@ class RemoveTests(RemoveEventTestCase):
     def test_logged_out_visitors_go_to_login(self):
         response = self.remove()
 
-        self.assertRedirects(response, reverse('login') + '?next=' + reverse('event_remove', args=[self.game.pk]))
+        # The remove URL only takes POST, so login returns to the event page.
+        self.assertRedirects(response, reverse('login') + '?next=' + self.game.get_absolute_url())
         self.game.refresh_from_db()
         self.assertEqual(self.game.status, EventStatus.SCHEDULED)
 
@@ -121,6 +122,23 @@ class RemovedEventDisappearsTests(RemoveEventTestCase):
                 response = self.client.get(reverse('event_list'), {'view': 'list', 'tab': 'events', 'scope': scope})
                 self.assertContains(response, 'Bad game')
                 self.assertContains(response, 'Removed by a moderator')
+
+    def test_removed_live_and_ended_games_stay_in_my_events(self):
+        live = self.event('Live game', start='11:00', end='13:00')
+        over = self.event('Ended game', start='08:00', end='09:00')
+        for game in (live, over):
+            RSVP.objects.create(event=game, user=self.player)
+            self.client.force_login(self.admin)
+            self.client.post(reverse('event_remove', args=[game.pk]))
+        self.remove(self.admin)
+
+        for user, scope in ((self.player, 'attending'), (self.host, 'hosting')):
+            with self.subTest(scope):
+                self.client.force_login(user)
+                self.assertEqual(self.titles(scope=scope), ['Live game', 'Bad game'])
+                self.assertEqual(self.titles(scope=scope, phase='ended'), ['Ended game'])
+        self.client.logout()
+        self.assertEqual(self.titles(phase=list(EventPhase)), [])
 
 
 class RemovedEventPageTests(RemoveEventTestCase):

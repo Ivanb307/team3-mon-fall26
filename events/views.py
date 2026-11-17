@@ -455,6 +455,10 @@ class EventCancelView(OrganizerOrAdminRequiredMixin, View):
 class EventRemoveView(StaffRequiredMixin, View):
     """US-7.5 (#48): an administrator takes down an inappropriate or invalid event, at any point in its life."""
 
+    def handle_no_permission(self):
+        # This URL only takes POST, so after login go back to the event page instead.
+        return redirect_to_login(reverse('event_detail', kwargs={'pk': self.kwargs['pk']}))
+
     def post(self, request, pk):
         reason = request.POST.get('reason', '').strip()[:REMOVAL_REASON_MAX_LENGTH]
         with transaction.atomic():

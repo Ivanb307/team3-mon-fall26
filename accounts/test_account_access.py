@@ -2,6 +2,8 @@
 
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.admin.models import CHANGE, LogEntry
+from django.contrib.sessions.models import Session
+from django.test import Client
 from django.urls import reverse
 
 from events.models import RSVP
@@ -115,6 +117,26 @@ class SuspendTests(AccountAccessTestCase):
 
         self.assert_active(self.participant, False)
         self.assertTrue(LogEntry.objects.filter(object_id=str(self.participant.pk), action_flag=CHANGE).exists())
+
+    def test_suspending_deletes_their_sessions_so_restoring_needs_a_new_login(self):
+        for how in ('action', 'form'):
+            with self.subTest(how):
+                player = Client()
+                player.force_login(self.participant)
+                other = Client()
+                other.force_login(self.organizer)
+                self.client.force_login(self.admin)
+
+                if how == 'action':
+                    self.run_action('suspend_accounts', self.participant)
+                else:
+                    self.post_user_change(self.participant, is_active=False)
+                self.assertFalse(Session.objects.filter(session_key=player.session.session_key).exists())
+                self.assertTrue(Session.objects.filter(session_key=other.session.session_key).exists())
+
+                self.run_action('restore_accounts', self.participant)
+                response = player.get(reverse('event_create'))
+                self.assertRedirects(response, f'{reverse("login")}?next={reverse("event_create")}')
 
 
 class RestoreTests(AccountAccessTestCase):

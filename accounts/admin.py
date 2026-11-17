@@ -13,6 +13,7 @@ from events.models import RSVP, Event
 from parks.models import Review
 
 from .audit import log_admin_action
+from .suspension import end_sessions
 
 User = get_user_model()
 
@@ -77,6 +78,11 @@ class UserAdmin(BaseUserAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if change and 'is_active' in form.changed_data and not obj.is_active:
+            end_sessions([obj])
+
     @admin.display(description='Links')
     def activity(self, user):
         """Links to what the account has done on the site, each filtered to this account."""
@@ -106,7 +112,7 @@ class UserAdmin(BaseUserAdmin):
 
     def set_active(self, request, queryset, active):
         """Suspend or restore the accounts this administrator may change, logging each one."""
-        changed, skipped = 0, 0
+        changed, skipped = [], 0
         with transaction.atomic():
             for user in queryset.select_for_update():
                 if user.is_active == active:
@@ -117,9 +123,11 @@ class UserAdmin(BaseUserAdmin):
                 user.is_active = active
                 user.save(update_fields=['is_active'])
                 log_admin_action(request.user, user, 'change', 'Restored account' if active else 'Suspended account')
-                changed += 1
+                changed.append(user)
+            if not active:
+                end_sessions(changed)
         verb = 'Restored' if active else 'Suspended'
-        self.message_user(request, f'{verb} {changed} account{pluralize(changed)}.')
+        self.message_user(request, f'{verb} {len(changed)} account{pluralize(len(changed))}.')
         if skipped:
             self.message_user(
                 request,

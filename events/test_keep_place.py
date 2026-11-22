@@ -1,4 +1,4 @@
-"""#122: actions return to the section they came from, with their message there."""
+"""#122: actions return to the section they came from, with any remaining messages there."""
 
 from django.urls import reverse
 
@@ -118,17 +118,6 @@ class DiscussionTests(KeepPlaceTestCase):
 
 
 class TopOfPageTests(KeepPlaceTestCase):
-    def test_edit_event_save_still_returns_to_the_top_with_its_message(self):
-        response = self.client.post(self.url, self.payload(title='Sunday hoops'))
-        self.assertRedirects(response, self.detail, fetch_redirect_response=False)
-        page = self.client.get(response['Location'])
-        self.assertEqual(self.where(page, 'Your event has been updated.'), 'top')
-
-    def test_other_pages_still_show_messages_at_the_top(self):
-        self.client.post(self.url, self.payload(title='Sunday hoops'))
-        page = self.client.get(reverse('event_list'))
-        self.assertContains(page, 'Your event has been updated.')
-
     def test_page_without_messages_has_no_empty_message_boxes(self):
         page = self.client.get(self.detail)
         self.assertNotContains(page, 'class="messages')

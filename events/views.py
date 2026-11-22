@@ -406,9 +406,7 @@ class EventCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.organizer = self.request.user
-        response = super().form_valid(form)
-        messages.success(self.request, 'Event created and published!')
-        return response
+        return super().form_valid(form)
 
     def get_success_url(self):
         return reverse('event_detail', kwargs={'pk': self.object.pk})
@@ -528,7 +526,6 @@ class EventUpdateView(OrganizerOrAdminRequiredMixin, UpdateView):
             updated = form.save(commit=False)
             # Save only the edited fields, so a cancellation saved meanwhile isn't overwritten.
             updated.save(update_fields=[*form.fields, 'updated_at'])
-        messages.success(self.request, 'Your event has been updated.')
         return redirect(updated.get_absolute_url())
 
 

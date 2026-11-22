@@ -81,7 +81,6 @@ class ReviewSubmissionTests(ReviewTestCase):
         review = Review.objects.get()
         self.assertEqual((review.user, review.park, review.rating), (self.writer, self.park, 5))
         self.assertEqual(review.body, 'Courts are in great shape.')
-        self.assertContains(response, 'Your review has been posted.')
         self.assertContains(response, 'Your review')
         self.assertContains(response, 'Courts are in great shape.')
         self.assertNotContains(response, 'aria-label="Write a park review"')

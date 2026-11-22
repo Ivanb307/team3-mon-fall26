@@ -47,7 +47,6 @@ class OwnerEditsTests(OwnReviewTestCase):
         self.own.refresh_from_db()
         self.assertEqual((self.own.rating, self.own.body), (2, 'Lights were out all week.'))
         self.assertEqual(Review.objects.count(), 1)
-        self.assertIn('Your review has been updated.', self.messages(response))
         self.assertContains(response, 'Lights were out all week.')
         self.assertContains(response, '2 / 5 stars')
         self.assertNotContains(response, 'Clean courts and working lights.')
@@ -95,12 +94,10 @@ class OwnerDeletesTests(OwnReviewTestCase):
 
         self.assertRedirects(response, self.url + '#reviews')
         self.assertFalse(Review.objects.filter(pk=self.own.pk).exists())
-        self.assertIn('Your review has been deleted.', self.messages(response))
         self.assertContains(response, 'Write a review')
         self.assertContains(response, 'No reviews yet')
 
         again = self.client.post(self.url, {'rating': '3', 'body': 'Second look: decent.'}, follow=True)
-        self.assertIn('Your review has been posted.', self.messages(again))
         self.assertEqual(Review.objects.get().body, 'Second look: decent.')
 
     def test_own_review_on_a_retired_park_can_still_be_deleted(self):

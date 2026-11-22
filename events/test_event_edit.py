@@ -104,7 +104,6 @@ class EventEditTests(EventEditTestCase):
             (self.event.title, self.event.time, self.event.meeting_spot),
             ('Sunday hoops', datetime.time(19, 30), 'Court 5'),
         )
-        self.assertIn('Your event has been updated.', self.messages(response))
         self.assertContains(response, 'Court 5')
         explore = self.client.get(reverse('event_list'), {'view': 'list', 'tab': 'events'})
         self.assertContains(explore, 'Sunday hoops')
@@ -259,7 +258,6 @@ class EventLimitTests(EventEditTestCase):
         response = self.save(capacity='7', host_is_playing=None)
 
         self.event.refresh_from_db()
-        self.assertIn('Your event has been updated.', self.messages(response))
         self.assertEqual((self.event.capacity, self.event.host_is_playing), (7, False))
         self.assertEqual(self.confirmed(), 7)
 

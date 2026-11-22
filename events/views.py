@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
+from accounts.audit import log_admin_action
 from parks.models import Facility, Park
 from parks.views import facility_groups
 
@@ -795,9 +796,12 @@ def delete_event_message(request, pk, message_pk):
     if not request.user.is_authenticated:
         return redirect_to_login(event_url)
 
-    message = get_deletable_message(request, pk, message_pk)
-    message_id = message.pk
-    message.delete()
+    with transaction.atomic():
+        message = get_deletable_message(request, pk, message_pk)
+        message_id = message.pk
+        if request.user.is_staff and message.author_id != request.user.pk:
+            log_admin_action(request.user, message, 'delete', 'Deleted event discussion message')
+        message.delete()
     if wants_json:
         return JsonResponse({'deleted': True, 'id': message_id})
     return redirect(event_url)

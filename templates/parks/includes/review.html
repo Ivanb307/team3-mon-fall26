@@ -5,4 +5,10 @@
     <time datetime="{{ review.created_at|date:'c' }}">{{ review.created_at|date:"M j, Y" }}</time>
   </header>
   <p class="park-review-body">{{ review.body|linebreaksbr }}</p>
+  {% if is_administrator %}
+    <form method="post" action="{% url 'park_review_moderate_delete' pk=review.pk %}" onsubmit="return confirm('Remove this review? This cannot be undone.');">
+      {% csrf_token %}
+      <button class="btn btn--ghost" type="submit">Remove</button>
+    </form>
+  {% endif %}
 </article>

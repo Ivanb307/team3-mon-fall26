@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static reporting %}
 
 {% block title %}{{ event.display_title }} at {{ event.park.name }} · NYC Active{% endblock %}
 
@@ -21,6 +21,7 @@
       Hosted by <a href="{% url 'public_profile' username=event.organizer.username %}"><strong>@{{ event.organizer.profile.display_username|default:event.organizer.username }}</strong></a>
     </p>
     {% if event.status == 'cancelled' %}<p class="event-cancelled-notice" role="status">Cancelled by the host</p>{% endif %}
+    {% report_control 'event' event.pk event.organizer_id %}
   </header>
 
   <dl class="event-meta">

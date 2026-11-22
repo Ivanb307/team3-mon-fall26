@@ -215,7 +215,9 @@ class EventDiscussionTests(TestCase):
         self.assertFalse(Message.objects.filter(pk=message.pk).exists())
 
     def test_staff_deleting_their_own_message_does_not_create_moderation_entry(self):
-        admin = User.objects.create_user('discussion-author-admin', 'discussion-author-admin@example.test', is_staff=True)
+        admin = User.objects.create_user(
+            'discussion-author-admin', 'discussion-author-admin@example.test', is_staff=True
+        )
         message = self.make_message('My own message', author=admin)
         self.client.force_login(admin)
 

@@ -153,8 +153,11 @@ class ReviewModerationDeleteView(StaffRequiredMixin, View):
     http_method_names = ['post']
 
     def post(self, request, pk):
-        review = get_object_or_404(Review.objects.select_related('park'), pk=pk)
         with transaction.atomic():
+            review = get_object_or_404(
+                Review.objects.select_for_update(of=('self',)).select_related('park'),
+                pk=pk,
+            )
             log_admin_action(request.user, review, 'delete', 'Removed park review')
             review.delete()
         return redirect('event_list' if review.park.is_retired else reviews_url(review.park_id))

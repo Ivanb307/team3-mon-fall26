@@ -736,7 +736,11 @@ def get_editable_message(request, event_pk, message_pk):
 
 def get_deletable_message(request, event_pk, message_pk):
     event = get_object_or_404(Event, pk=event_pk)
-    message = get_object_or_404(Message.objects.select_related('author__profile'), pk=message_pk, event=event)
+    message = get_object_or_404(
+        Message.objects.select_for_update(of=('self',)).select_related('author__profile'),
+        pk=message_pk,
+        event=event,
+    )
     can_delete_as_author = message.author_id == request.user.pk and event.discussion_open
     if not event.can_be_managed_by(request.user) and not can_delete_as_author:
         raise PermissionDenied

@@ -117,6 +117,7 @@ class EventCreationAndCapacityTests(TestCase):
         self.assertEqual(event.activity, Activity.BASKETBALL)
         self.assertEqual(event.skill_level, SkillLevel.INTERMEDIATE)
         self.assertEqual(event.capacity, 10)
+        self.assertContains(response, 'Event created and published!')
         self.assertContains(response, 'Saturday Morning 5v5 Pickup')
         self.assertContains(response, 'North Meadow, Court 3')
         self.assertContains(response, 'Basketball')

@@ -35,6 +35,8 @@ ADMINISTRATOR_PERMISSIONS = (
     ('auth', 'view_user'),
     ('auth', 'change_user'),
     ('admin', 'view_logentry'),
+    ('reports', 'view_report'),
+    ('reports', 'change_report'),
 )
 
 

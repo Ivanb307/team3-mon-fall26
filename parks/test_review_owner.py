@@ -97,7 +97,7 @@ class OwnerDeletesTests(OwnReviewTestCase):
         self.assertContains(response, 'Write a review')
         self.assertContains(response, 'No reviews yet')
 
-        again = self.client.post(self.url, {'rating': '3', 'body': 'Second look: decent.'}, follow=True)
+        self.client.post(self.url, {'rating': '3', 'body': 'Second look: decent.'}, follow=True)
         self.assertEqual(Review.objects.get().body, 'Second look: decent.')
 
     def test_own_review_on_a_retired_park_can_still_be_deleted(self):

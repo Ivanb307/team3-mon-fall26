@@ -255,7 +255,7 @@ class EventLimitTests(EventEditTestCase):
         Event.objects.filter(pk=self.event.pk).update(capacity=8)
         self.event.refresh_from_db()
 
-        response = self.save(capacity='7', host_is_playing=None)
+        self.save(capacity='7', host_is_playing=None)
 
         self.event.refresh_from_db()
         self.assertEqual((self.event.capacity, self.event.host_is_playing), (7, False))

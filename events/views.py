@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
+from accounts.audit import log_admin_action
 from accounts.roles import StaffRequiredMixin, is_administrator
 from parks.models import Facility, Park
 from parks.views import facility_groups
@@ -762,7 +763,11 @@ def get_editable_message(request, event_pk, message_pk):
 
 def get_deletable_message(request, event_pk, message_pk):
     event = get_object_or_404(Event, pk=event_pk)
-    message = get_object_or_404(Message.objects.select_related('author__profile'), pk=message_pk, event=event)
+    message = get_object_or_404(
+        Message.objects.select_for_update(of=('self',)).select_related('author__profile'),
+        pk=message_pk,
+        event=event,
+    )
     can_delete_as_author = message.author_id == request.user.pk and event.discussion_open
     if not event.can_be_managed_by(request.user) and not can_delete_as_author:
         raise PermissionDenied
@@ -822,9 +827,12 @@ def delete_event_message(request, pk, message_pk):
     if not request.user.is_authenticated:
         return redirect_to_login(event_url)
 
-    message = get_deletable_message(request, pk, message_pk)
-    message_id = message.pk
-    message.delete()
+    with transaction.atomic():
+        message = get_deletable_message(request, pk, message_pk)
+        message_id = message.pk
+        if request.user.is_staff and message.author_id != request.user.pk:
+            log_admin_action(request.user, message, 'delete', 'Deleted event discussion message')
+        message.delete()
     if wants_json:
         return JsonResponse({'deleted': True, 'id': message_id})
     return redirect(event_url)

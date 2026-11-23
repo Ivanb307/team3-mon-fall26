@@ -69,8 +69,6 @@ class ParkDetailView(DetailView):
                 if not self.object.reviews.filter(user=request.user).exists():
                     raise
                 messages.error(request, REVIEW_EXISTS_MESSAGE)
-            else:
-                messages.success(request, 'Your review has been posted.')
             return redirect(review_url)
         return self.render_to_response(self.get_context_data(review_form=form))
 
@@ -128,7 +126,6 @@ class ReviewUpdateView(OwnReviewView):
         form = ReviewForm(request.POST, instance=review)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Your review has been updated.')
             return self.done(review)
         if review.park.is_retired:
             messages.error(request, ' '.join(error for errors in form.errors.values() for error in errors))
@@ -143,7 +140,6 @@ class ReviewUpdateView(OwnReviewView):
 class ReviewDeleteView(OwnReviewView):
     def handle(self, request, review):
         review.delete()
-        messages.success(request, 'Your review has been deleted.')
         return self.done(review)
 
 

@@ -71,6 +71,24 @@ a {
   height: 40px;
 }
 
+/* US-7.7 (#50): site-wide banner announcement, above the header */
+
+.site-banner {
+  padding: 10px 24px;
+  color: #fff;
+  text-align: center;
+  background: var(--green-900);
+}
+
+.site-banner-message {
+  max-width: 72ch;
+  margin: 0 auto;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 /* Header (non-auth pages) */
 
 .site-header {

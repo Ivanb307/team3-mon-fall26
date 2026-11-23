@@ -21,6 +21,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from reports.views import submit_report
+from sitetools.views import metrics
 
 from . import views
 
@@ -28,6 +29,8 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('health/', views.health, name='health'),
     path('ready/', views.ready, name='ready'),
+    # Before admin/, which would otherwise read "metrics" as an app name and 404.
+    path('admin/metrics/', admin.site.admin_view(metrics), name='admin_metrics'),
     path('admin/', admin.site.urls),
     path('', include('accounts.urls')),
     path('', include('events.urls')),

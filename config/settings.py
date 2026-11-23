@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'parks',
     'events',
     'reports',
+    'sitetools',
 ]
 
 MIDDLEWARE = [
@@ -67,6 +68,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'accounts.context_processors.roles',
+                'sitetools.context_processors.site_banner',
             ],
         },
     },

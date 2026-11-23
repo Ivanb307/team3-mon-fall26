@@ -37,6 +37,10 @@ ADMINISTRATOR_PERMISSIONS = (
     ('admin', 'view_logentry'),
     ('reports', 'view_report'),
     ('reports', 'change_report'),
+    # Banners are taken down by unticking Active, so administrators don't delete them (#50).
+    ('sitetools', 'view_sitebanner'),
+    ('sitetools', 'add_sitebanner'),
+    ('sitetools', 'change_sitebanner'),
 )
 
 

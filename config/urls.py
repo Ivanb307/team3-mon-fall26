@@ -19,6 +19,9 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+
+from reports.views import submit_report
+
 from . import views
 
 urlpatterns = [
@@ -29,6 +32,7 @@ urlpatterns = [
     path('', include('accounts.urls')),
     path('', include('events.urls')),
     path('', include('parks.urls')),
+    path('reports/<str:kind>/<int:pk>/', submit_report, name='submit_report'),
 ]
 
 # Serves uploaded profile photos locally; static() adds nothing when DEBUG is off.

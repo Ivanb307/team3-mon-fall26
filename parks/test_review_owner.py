@@ -1,5 +1,8 @@
 """#41: members edit or delete their own park review."""
 
+import re
+
+from django.contrib.admin.models import DELETION, LogEntry
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
@@ -157,3 +160,78 @@ class NonOwnerTests(OwnReviewTestCase):
         self.assertEqual(client.post(self.edit_url, {'rating': '1', 'body': 'x'}).status_code, 403)
         self.assertEqual(client.post(self.delete_url).status_code, 403)
         self.assertUnchanged()
+
+
+class AdministratorReviewModerationTests(ReviewTestCase):
+    def test_staff_can_remove_any_review_and_audit_snapshot_and_summary_update(self):
+        review = self.review(rating=5, body='Broken glass near the playground.')
+        remaining = self.review(user=self.other_writer, rating=1, body='Water fountain works.')
+        admin = User.objects.create_user('park-review-moderator', 'moderator@example.test', is_staff=True)
+        self.client.force_login(admin)
+        moderation_url = reverse('park_review_moderate_delete', kwargs={'pk': review.pk})
+
+        page = self.client.get(self.url)
+        self.assertContains(page, f'action="{moderation_url}"')
+        self.assertContains(page, 'Remove')
+        response = self.client.post(moderation_url, follow=True)
+
+        self.assertRedirects(response, self.url + '#reviews')
+        self.assertFalse(Review.objects.filter(pk=review.pk).exists())
+        self.assertContains(response, 'Water fountain works.')
+        self.assertNotContains(response, 'Broken glass near the playground.')
+        self.assertNotContains(response, 'Review has been removed.')
+        self.assertContains(response, '1.0 (1 review)')
+        self.assertTrue(Review.objects.filter(pk=remaining.pk).exists())
+
+        entry = LogEntry.objects.get(action_flag=DELETION, object_id=str(review.pk))
+        self.assertEqual(entry.user, admin)
+        self.assertEqual(entry.content_type.model, 'review')
+        self.assertIn('Removed park review', entry.get_change_message())
+        self.assertIn('body: Broken glass near the playground.', entry.get_change_message())
+        self.assertIsNotNone(entry.action_time)
+
+    def test_non_staff_cannot_see_or_use_moderation_action(self):
+        review = self.review()
+        self.client.force_login(self.other_writer)
+        moderation_url = reverse('park_review_moderate_delete', kwargs={'pk': review.pk})
+
+        page = self.client.get(self.url)
+        self.assertNotContains(page, moderation_url)
+        self.assertNotContains(page, 'Remove')
+        self.assertEqual(self.client.post(moderation_url).status_code, 403)
+        self.assertTrue(Review.objects.filter(pk=review.pk).exists())
+        self.assertFalse(LogEntry.objects.filter(object_id=str(review.pk), action_flag=DELETION).exists())
+
+    def test_moderation_endpoint_is_post_only(self):
+        review = self.review()
+        self.client.force_login(User.objects.create_user('park-review-mod', is_staff=True))
+
+        response = self.client.get(reverse('park_review_moderate_delete', kwargs={'pk': review.pk}))
+
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(Review.objects.filter(pk=review.pk).exists())
+
+    def test_staff_can_submit_the_rendered_moderation_form_with_csrf_checks_enabled(self):
+        review = self.review()
+        admin = User.objects.create_user('park-review-csrf-mod', is_staff=True)
+        client = self.client_class(enforce_csrf_checks=True)
+        client.force_login(admin)
+        page = client.get(self.url)
+
+        moderation_form = re.search(
+            rb'<form\b[^>]*action="'
+            + re.escape(reverse('park_review_moderate_delete', kwargs={'pk': review.pk}).encode())
+            + rb'"[^>]*>(.*?)</form>',
+            page.content,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(moderation_form)
+        token = re.search(rb'name="csrfmiddlewaretoken" value="([^"]+)"', moderation_form.group(1))
+        self.assertIsNotNone(token)
+        response = client.post(
+            reverse('park_review_moderate_delete', kwargs={'pk': review.pk}),
+            {'csrfmiddlewaretoken': token.group(1).decode()},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Review.objects.filter(pk=review.pk).exists())
